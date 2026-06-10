@@ -1,6 +1,6 @@
 {
 	"name": "@sentixx/pi-info",
-	"version": "0.3.1",
+	"version": "0.4.0",
 	"description": "Fully customizable statusline for pi — pluggable segments, priority ordering, per-segment colors, and an open registry API so any extension can contribute its own widgets.",
 	"type": "module",
 	"keywords": [

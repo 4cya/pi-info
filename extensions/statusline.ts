@@ -29,7 +29,6 @@ import { openColorConfigurator } from "../lib/configurators/colors.js";
 import type { ConfiguratorDeps } from "../lib/configurators/deps.js";
 import { openOrderConfigurator } from "../lib/configurators/order.js";
 import { openSegmentConfigurator } from "../lib/configurators/segments.js";
-import { openStatusConfigurator } from "../lib/configurators/status.js";
 import {
 	parseThresholds,
 	readGlobalConfig,
@@ -39,12 +38,11 @@ import {
 } from "../lib/config.js";
 import {
 	DEFAULT_SEGMENTS,
-	SEGMENT_LABELS,
 	STATUS_FILTER_ENTRY_TYPE,
 	type SegmentName,
 } from "../lib/constants.js";
 import { renderFooterLine } from "../lib/footer.js";
-import { registeredSegments, visibleDynamic } from "../lib/registry.js";
+import { visibleDynamic } from "../lib/registry.js";
 import {
 	parseSerializedStatusFilter,
 	serializeStatusFilter,
@@ -54,15 +52,6 @@ import {
 // Public API for other extensions: register custom footer segments.
 export { registerSegment, unregisterSegment } from "../lib/registry.js";
 export type { SegmentProvider } from "../segments/types.js";
-
-function describeSegments(segments: readonly SegmentName[]): string {
-	const parts = segments.map((segment) => SEGMENT_LABELS[segment]);
-	for (const [name, provider] of registeredSegments) {
-		if (visibleDynamic.has(name)) parts.push(provider.label);
-	}
-	if (parts.length === 0) return "showing none";
-	return `showing: ${parts.join(", ")}`;
-}
 
 export default function (pi: ExtensionAPI) {
 	let requestRender: (() => void) | undefined;
@@ -125,7 +114,7 @@ export default function (pi: ExtensionAPI) {
 		description: "Configure the pi-info footer",
 		getArgumentCompletions(prefix: string) {
 			const word = prefix.trim().split(/\s+/).filter(Boolean).pop() ?? "";
-			const items = ["segments", "status", "color", "order", "list"];
+			const items = ["segments", "color", "order"];
 			return items
 				.filter((item) => item.startsWith(word))
 				.map((item) => ({ value: item, label: item }));
@@ -138,22 +127,12 @@ export default function (pi: ExtensionAPI) {
 					case "segments":
 						await openSegmentConfigurator(ctx, deps);
 						return true;
-					case "status":
-						await openStatusConfigurator(ctx, deps);
-						return true;
 					case "color":
 					case "colors":
 						await openColorConfigurator(ctx, deps);
 						return true;
 					case "order":
 						await openOrderConfigurator(ctx, deps);
-						return true;
-					case "list":
-					case "ls":
-						ctx.ui.notify(
-							`pi-info footer: ${describeSegments(visibleSegments)}`,
-							"info",
-						);
 						return true;
 					default:
 						return false;
@@ -164,10 +143,8 @@ export default function (pi: ExtensionAPI) {
 
 			const choice = await ctx.ui.select("pi-info", [
 				"segments — show/hide footer segments",
-				"status   — filter extension statuses",
 				"color    — change segment colors",
 				"order    — reorder segment display",
-				"list     — show current config",
 			]);
 			if (!choice) return;
 			await route(choice.split(/\s+—/)[0].trim());

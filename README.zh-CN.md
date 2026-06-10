@@ -57,10 +57,8 @@ pi 已在运行？先 `/reload`，再打开配置器：
 | 子命令 | 作用 |
 | --- | --- |
 | `/info segments` | 开关任意段，含扩展状态 |
-| `/info status` | 按 key 精细过滤扩展状态 |
 | `/info color` | 每段颜色——主题色名或 `#RRGGBB` |
 | `/info order` | 调整段顺序 |
-| `/info list` | 打印当前配置 |
 
 **段可见性：**
 

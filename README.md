@@ -57,10 +57,8 @@ Segments hide automatically when they have nothing to show.
 | Subcommand | What it does |
 | --- | --- |
 | `/info segments` | Show/hide any segment, including extension statuses |
-| `/info status` | Fine-grained filter for extension status keys |
 | `/info color` | Per-segment colors — theme names or `#RRGGBB` |
 | `/info order` | Reorder segments |
-| `/info list` | Print current config |
 
 **Segment visibility:**
 

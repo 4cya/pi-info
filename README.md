@@ -64,7 +64,7 @@ Segments hide automatically when they have nothing to show.
 | `/info order` | Reorder segments |
 | `/info separator` | Change the separator between segments (string + color) |
 | `/info format` | Edit per-segment format templates |
-| `/info preset` | Apply a format preset (`plain` / `nerd` / `emoji`) in one step |
+| `/info preset` | Apply a style preset — formats + separator (`plain` / `minimal` / `bars` / `nerd` / `emoji`) |
 
 **Segment visibility:**
 
@@ -82,7 +82,7 @@ Settings persist to `~/.pi/agent/pi-info.json` — one object per segment:
 {
   "separator": { "char": "❯", "color": "dim" },
   "segments": {
-    "model":   { "format": " {name}", "color": "accent", "order": 1 },
+    "model":   { "format": " {name}", "color": "accent", "order": 1 },
     "context": { "format": "[{percent}%](auto bold) · {window}" },
     "io":      false,
     "weather": { "command": "curl -s 'wttr.in?format=%t'", "interval": 300 }
@@ -118,7 +118,7 @@ Any Unicode works: Nerd Font glyphs, emoji, powerline characters.
 
 ```json
 "context": "[{percent}%](auto) [of](dim) {window}",
-"branch":  "[](#f34f29) {branch}",
+"branch":  "[](#f34f29) {branch}",
 "io":      "(⬆{input}  )(⬇{output})"
 ```
 

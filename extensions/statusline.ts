@@ -135,6 +135,10 @@ export default function (pi: ExtensionAPI) {
 				format: preset.formats[name],
 			});
 		}
+		if (preset.separator) {
+			separatorConfig = preset.separator;
+			writeGlobalConfig({ separator: separatorConfig });
+		}
 		persistSegments();
 	};
 

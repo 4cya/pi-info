@@ -64,7 +64,7 @@ pi 已在运行？先 `/reload`，再打开配置器：
 | `/info order` | 调整段顺序 |
 | `/info separator` | 自定义段之间的分隔符（字符 + 颜色） |
 | `/info format` | 编辑每段的格式模板 |
-| `/info preset` | 一键套用格式预设（`plain` / `nerd` / `emoji`） |
+| `/info preset` | 一键套用风格预设——格式 + 分隔符（`plain` / `minimal` / `bars` / `nerd` / `emoji`） |
 
 **段可见性：**
 
@@ -82,7 +82,7 @@ pi 已在运行？先 `/reload`，再打开配置器：
 {
   "separator": { "char": "❯", "color": "dim" },
   "segments": {
-    "model":   { "format": " {name}", "color": "accent", "order": 1 },
+    "model":   { "format": " {name}", "color": "accent", "order": 1 },
     "context": { "format": "[{percent}%](auto bold) · {window}" },
     "io":      false,
     "weather": { "command": "curl -s 'wttr.in?format=%t'", "interval": 300 }
@@ -117,7 +117,7 @@ thinking 仍保留等级色。任何 Unicode 都能用：Nerd Font 字形、emoj
 
 ```json
 "context": "[{percent}%](auto) [of](dim) {window}",
-"branch":  "[](#f34f29) {branch}",
+"branch":  "[](#f34f29) {branch}",
 "io":      "(⬆{input}  )(⬇{output})"
 ```
 

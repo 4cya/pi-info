@@ -42,7 +42,7 @@ import {
 	type SegmentName,
 } from "../lib/constants.js";
 import { renderFooterLine } from "../lib/footer.js";
-import { registeredSegments, visibleDynamic } from "../lib/registry.js";
+import { registeredSegments, registerSegment, visibleDynamic } from "../lib/registry.js";
 import { createCustomSegment } from "../segments/custom.js";
 import {
 	parseSerializedStatusFilter,

@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import type { ThemeColor } from "@earendil-works/pi-coding-agent";
 import type { CustomSegmentConfig } from "../lib/config.js";
 import type { SegmentProvider } from "./types.js";
 
@@ -30,6 +31,7 @@ export function createCustomSegment(cfg: CustomSegmentConfig): SegmentProvider {
 				return cached || null;
 			}
 		},
-		color: cfg.color ? () => cfg.color! : undefined,
+		// Config color is free-form user input; trust it as a theme color or hex.
+		color: cfg.color ? () => cfg.color as ThemeColor | `#${string}` : undefined,
 	};
 }

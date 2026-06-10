@@ -15,7 +15,7 @@
  *   lib/config.ts          persisted config + env parsing
  *   lib/footer.ts          footer line rendering
  *   lib/registry.ts        dynamic segment registry (public registerSegment API)
- *   lib/configurators/     /statusline TUI configurators
+ *   lib/configurators/     /info TUI configurators
  *   segments/              SegmentProvider interface + built-in providers
  *
  * Environment variables:

@@ -1,0 +1,60 @@
+{
+	"name": "pi-statusline",
+	"version": "0.1.0",
+	"description": "Modular, configurable statusline for pi: model, thinking level, context pressure, cost/cache/token segments, and extension statuses.",
+	"type": "module",
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"pi",
+		"pi-statusline",
+		"statusline",
+		"footer",
+		"model",
+		"thinking",
+		"context",
+		"context-window"
+	],
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/moesin-lab/pi-statusline.git"
+	},
+	"bugs": {
+		"url": "https://github.com/moesin-lab/pi-statusline/issues"
+	},
+	"homepage": "https://github.com/moesin-lab/pi-statusline#readme",
+	"files": [
+		"extensions",
+		"lib",
+		"segments",
+		"README.md",
+		"LICENSE"
+	],
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*",
+		"@earendil-works/pi-tui": "*"
+	},
+	"peerDependenciesMeta": {
+		"@earendil-works/pi-coding-agent": {
+			"optional": true
+		},
+		"@earendil-works/pi-tui": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "^0.79.1",
+		"@earendil-works/pi-tui": "^0.79.1",
+		"@types/node": "^25.9.2",
+		"typescript": "^6.0.3"
+	},
+	"pi": {
+		"extensions": [
+			"./extensions/statusline.ts"
+		]
+	}
+}

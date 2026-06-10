@@ -69,15 +69,18 @@ export default function (pi: ExtensionAPI) {
 		if (!visibleDynamic.has(name)) visibleDynamic.add(name);
 	}
 	// Register declarative custom segments from config.
-	if (initialConfig.customSegments) {
-		for (const cfg of initialConfig.customSegments) {
+	const registerCustomSegments = () => {
+		const config = readGlobalConfig();
+		if (!config.customSegments) return;
+		for (const cfg of config.customSegments) {
 			try {
 				registerSegment(createCustomSegment(cfg));
 			} catch {
 				// Skip broken custom segments.
 			}
 		}
-	}
+	};
+	registerCustomSegments();
 	const segmentColors: Record<string, string> = initialConfig.segmentColors ?? {};
 	let segmentOrder: Record<string, number> = initialConfig.segmentOrder ?? {};
 
@@ -178,6 +181,7 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_start", async (_event, ctx) => {
 		visibleSegments = readGlobalSegments() ?? DEFAULT_SEGMENTS;
 		restoreStatusFilter(ctx);
+		registerCustomSegments();
 
 		if (!ctx.hasUI) return;
 

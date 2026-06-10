@@ -6,6 +6,7 @@
  */
 
 import billingProvider from "../segments/billing.js";
+import branchProvider from "../segments/branch.js";
 import cacheProvider from "../segments/cache.js";
 import cwdProvider from "../segments/cwd.js";
 import ioProvider from "../segments/io.js";
@@ -34,6 +35,7 @@ export function unregisterSegment(name: string) {
 
 // Built-in dynamic segments, hidden/shown via /info like any other.
 registerSegment(billingProvider);
+registerSegment(branchProvider);
 registerSegment(cacheProvider);
 registerSegment(cwdProvider);
 registerSegment(ioProvider);

@@ -45,6 +45,7 @@ Already running? `/reload`, then open the configurator:
 | `cache` | Prompt-cache read/write tokens (`R12k W3.4k`) | on |
 | `io` | Token I/O (`↑12k ↓3.4k`) | on |
 | `cwd` | Working directory (`~/projects/app`) | on |
+| `branch` | Current git branch (`main`) | on |
 
 Segments hide automatically when they have nothing to show.
 

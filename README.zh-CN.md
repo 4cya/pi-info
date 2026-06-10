@@ -45,6 +45,7 @@ pi 已在运行？先 `/reload`，再打开配置器：
 | `cache` | 提示缓存读/写 token（`R12k W3.4k`） | 开 |
 | `io` | token 输入输出（`↑12k ↓3.4k`） | 开 |
 | `cwd` | 工作目录（`~/projects/app`） | 开 |
+| `branch` | 当前 git 分支（`main`） | 开 |
 
 没有内容可显示的段会自动隐藏。
 

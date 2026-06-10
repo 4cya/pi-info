@@ -2,6 +2,8 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
+<img src="assets/cover.png" alt="pi-info cover" width="800" />
+
 [pi](https://pi.dev) 的模块化、完全可配置信息栏。把你需要随时盯着的信息——当前模型、思考等级、上下文压力、花费、扩展状态——收进一行干净的 footer。
 
 ```text
@@ -16,6 +18,8 @@ claude-opus-4.7  ❯  think:med  ❯  2.6% / 1.0M  ❯  $0.412  ❯  ↑12k ↓3
 - **花费追踪** —— 可选的成本、缓存命中、token 输入输出段。
 - **可插拔 segment** —— 任何扩展一个函数调用即可注册自己的段；pi-info 保持纯展示层。
 - **完全可配置** —— 在 pi 内开关、改色、排序每个段，设置跨会话持久化。
+
+<img src="assets/basic.png" alt="pi-info 状态栏效果" width="700" />
 
 ## 快速开始
 
@@ -46,6 +50,8 @@ pi 已在运行？先 `/reload`，再打开配置器：
 
 ## 配置
 
+<img src="assets/config.png" alt="pi-info 配置器 TUI" width="700" />
+
 ### `/info` 命令
 
 | 子命令 | 作用 |
@@ -55,6 +61,14 @@ pi 已在运行？先 `/reload`，再打开配置器：
 | `/info color` | 每段颜色——主题色名或 `#RRGGBB` |
 | `/info order` | 调整段顺序 |
 | `/info list` | 打印当前配置 |
+
+**段可见性：**
+
+<img src="assets/visibility.png" alt="段可见性开关" width="600" />
+
+**颜色配置：**
+
+<img src="assets/color.png" alt="颜色配置" width="600" />
 
 设置持久化到 `~/.pi/agent/pi-info.json`，对所有会话生效。
 

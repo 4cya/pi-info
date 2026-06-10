@@ -43,6 +43,7 @@ import {
 } from "../lib/constants.js";
 import { renderFooterLine } from "../lib/footer.js";
 import { registeredSegments, visibleDynamic } from "../lib/registry.js";
+import { createCustomSegment } from "../segments/custom.js";
 import {
 	parseSerializedStatusFilter,
 	serializeStatusFilter,
@@ -66,6 +67,16 @@ export default function (pi: ExtensionAPI) {
 	// Ensure newly registered built-in dynamic segments are visible.
 	for (const [name] of registeredSegments) {
 		if (!visibleDynamic.has(name)) visibleDynamic.add(name);
+	}
+	// Register declarative custom segments from config.
+	if (initialConfig.customSegments) {
+		for (const cfg of initialConfig.customSegments) {
+			try {
+				registerSegment(createCustomSegment(cfg));
+			} catch {
+				// Skip broken custom segments.
+			}
+		}
 	}
 	const segmentColors: Record<string, string> = initialConfig.segmentColors ?? {};
 	let segmentOrder: Record<string, number> = initialConfig.segmentOrder ?? {};

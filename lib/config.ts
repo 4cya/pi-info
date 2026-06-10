@@ -21,6 +21,15 @@ import {
 } from "./constants.js";
 import type { SerializedStatusFilter } from "./status-filter.js";
 
+export type CustomSegmentConfig = {
+	name: string;
+	label: string;
+	command: string;
+	color?: string;
+	/** Cache stdout for this many seconds (0 = always re-run). Default 60. */
+	interval?: number;
+};
+
 export type GlobalConfig = {
 	statusFilter?: SerializedStatusFilter;
 	segments?: SegmentName[];
@@ -30,6 +39,8 @@ export type GlobalConfig = {
 	segmentColors?: Record<string, string>;
 	/** Per-segment priority numbers (segment name → number). Lower = earlier. */
 	segmentOrder?: Record<string, number>;
+	/** Declarative custom segments that run shell commands. */
+	customSegments?: CustomSegmentConfig[];
 };
 
 export const CONFIG_PATH =
@@ -118,6 +129,16 @@ export function readGlobalConfig(): GlobalConfig {
 						),
 					)
 					: undefined,
+			customSegments: Array.isArray(data.customSegments)
+				? data.customSegments.filter(
+					(c): c is CustomSegmentConfig =>
+						typeof c === "object" &&
+						c !== null &&
+						typeof (c as CustomSegmentConfig).name === "string" &&
+						typeof (c as CustomSegmentConfig).label === "string" &&
+						typeof (c as CustomSegmentConfig).command === "string",
+				)
+				: undefined,
 		};
 	} catch {
 		return {};

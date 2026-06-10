@@ -42,7 +42,7 @@ Already running? `/reload`, then open the configurator:
 | `context` | Context usage % and window size | on |
 | `extensions` | Status badges set by other extensions | on |
 | `billing` | Cumulative session cost (`$0.412`) | on |
-| `cache` | Prompt-cache read/write tokens (`R12k W3.4k`) | on |
+| `cache` | Prompt-cache hit rate (`42%`) | on |
 | `io` | Token I/O (`↑12k ↓3.4k`) | on |
 | `cwd` | Working directory (`~/projects/app`) | on |
 | `branch` | Current git branch (`main`) | on |

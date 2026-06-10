@@ -42,7 +42,7 @@ pi 已在运行？先 `/reload`，再打开配置器：
 | `context` | 上下文用量百分比和窗口大小 | 开 |
 | `extensions` | 其他扩展设置的状态徽章 | 开 |
 | `billing` | 会话累计花费（`$0.412`） | 开 |
-| `cache` | 提示缓存读/写 token（`R12k W3.4k`） | 开 |
+| `cache` | 提示缓存命中率（`42%`） | 开 |
 | `io` | token 输入输出（`↑12k ↓3.4k`） | 开 |
 | `cwd` | 工作目录（`~/projects/app`） | 开 |
 | `branch` | 当前 git 分支（`main`） | 开 |

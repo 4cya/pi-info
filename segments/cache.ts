@@ -1,28 +1,26 @@
-import { formatTokens } from "../lib/text.js";
 import type { SegmentProvider } from "./types.js";
 
 /**
- * Cache segment: R<cacheRead> W<cacheWrite>
+ * Cache segment: shows prompt cache hit percentage.
  *
- * Shows prompt cache hit metrics from all assistant messages.
+ * Accumulates cache-read and total-input tokens across messages,
+ * then displays the hit rate as a percentage.
  */
 const cache: SegmentProvider = {
 	name: "cache",
 	label: "Cache",
 	render(ctx) {
-		let totalRead = 0;
-		let totalWrite = 0;
+		let cacheRead = 0;
+		let inputTokens = 0;
 		for (const entry of ctx.sessionManager.getEntries()) {
 			if (entry.type === "message" && entry.message.role === "assistant") {
 				const usage = entry.message.usage;
-				totalRead += usage.cacheRead;
-				totalWrite += usage.cacheWrite;
+				cacheRead += usage.cacheRead;
+				inputTokens += usage.input;
 			}
 		}
-		const parts: string[] = [];
-		if (totalRead) parts.push(`R${formatTokens(totalRead)}`);
-		if (totalWrite) parts.push(`W${formatTokens(totalWrite)}`);
-		return parts.length > 0 ? parts.join("  ") : null;
+		if (inputTokens === 0) return null;
+		return `${((cacheRead / inputTokens) * 100).toFixed(0)}%`;
 	},
 	color: () => "#94e2d5",
 };

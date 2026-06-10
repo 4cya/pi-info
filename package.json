@@ -1,5 +1,5 @@
 {
-	"name": "pi-info",
+	"name": "@sentixx/pi-info",
 	"version": "0.1.0",
 	"description": "Modular, configurable info bar for pi: model, thinking level, context pressure, cost/cache/token segments, and extension statuses.",
 	"type": "module",

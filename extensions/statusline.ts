@@ -1,5 +1,5 @@
 /**
- * pi-statusline — footer / statusline extension.
+ * pi-info — footer / info bar extension.
  *
  * Replaces pi's built-in footer with left-aligned segments:
  *   <model> ❯ think:<level> ❯ <context% / window> ❯ <extensions> ❯ <dynamic…>
@@ -19,9 +19,9 @@
  *   segments/              SegmentProvider interface + built-in providers
  *
  * Environment variables:
- *   PI_STATUSLINE_SHOW        comma-separated list of segments to show
- *   PI_STATUSLINE_THRESHOLDS  warning,danger context-usage percentages
- *   PI_STATUSLINE_CONFIG      override the persisted config path
+ *   PI_INFO_SHOW        comma-separated list of segments to show
+ *   PI_INFO_THRESHOLDS  warning,danger context-usage percentages
+ *   PI_INFO_CONFIG      override the persisted config path
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -121,8 +121,8 @@ export default function (pi: ExtensionAPI) {
 		refresh,
 	};
 
-	pi.registerCommand("statusline", {
-		description: "Configure the pi-statusline footer",
+	pi.registerCommand("info", {
+		description: "Configure the pi-info footer",
 		getArgumentCompletions(prefix: string) {
 			const word = prefix.trim().split(/\s+/).filter(Boolean).pop() ?? "";
 			const items = ["segments", "status", "color", "order", "list"];
@@ -151,7 +151,7 @@ export default function (pi: ExtensionAPI) {
 					case "list":
 					case "ls":
 						ctx.ui.notify(
-							`pi-statusline footer: ${describeSegments(visibleSegments)}`,
+							`pi-info footer: ${describeSegments(visibleSegments)}`,
 							"info",
 						);
 						return true;
@@ -162,7 +162,7 @@ export default function (pi: ExtensionAPI) {
 
 			if (await route(direct)) return;
 
-			const choice = await ctx.ui.select("pi-statusline", [
+			const choice = await ctx.ui.select("pi-info", [
 				"segments — show/hide footer segments",
 				"status   — filter extension statuses",
 				"color    — change segment colors",

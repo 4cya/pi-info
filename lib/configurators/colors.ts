@@ -1,5 +1,5 @@
 /**
- * /statusline color — per-segment color overrides. Space cycles presets;
+ * /info color — per-segment color overrides. Space cycles presets;
  * Enter opens an inline input for a custom hex or theme color name.
  */
 

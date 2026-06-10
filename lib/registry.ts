@@ -1,8 +1,8 @@
 /**
  * Dynamic segment registry. External code (other extensions, agent-written
  * scripts) can register SegmentProvider instances that appear in the footer
- * alongside built-in segments. /statusline toggles their visibility; config
- * persists in pi-statusline.json.
+ * alongside built-in segments. /info toggles their visibility; config
+ * persists in pi-info.json.
  */
 
 import billingProvider from "../segments/billing.js";
@@ -20,7 +20,7 @@ export const visibleDynamic = new Set<string>();
  */
 export function registerSegment(provider: SegmentProvider) {
 	registeredSegments.set(provider.name, provider);
-	// New segments default to visible. Persist is handled by the caller or /statusline.
+	// New segments default to visible. Persist is handled by the caller or /info.
 	if (!visibleDynamic.has(provider.name)) {
 		visibleDynamic.add(provider.name);
 	}
@@ -32,7 +32,7 @@ export function unregisterSegment(name: string) {
 	visibleDynamic.delete(name);
 }
 
-// Built-in dynamic segments, hidden/shown via /statusline like any other.
+// Built-in dynamic segments, hidden/shown via /info like any other.
 registerSegment(billingProvider);
 registerSegment(cacheProvider);
 registerSegment(cwdProvider);

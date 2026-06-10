@@ -1,5 +1,5 @@
 /**
- * Shared TUI scaffolding for the /statusline configurators: a titled
+ * Shared TUI scaffolding for the /info configurators: a titled
  * SettingsList inside ctx.ui.custom with search enabled.
  */
 

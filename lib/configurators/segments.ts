@@ -1,5 +1,5 @@
 /**
- * /statusline segments — toggle visibility of built-in segments, registered
+ * /info segments — toggle visibility of built-in segments, registered
  * dynamic segments, and (when present) individual extension statuses.
  */
 
@@ -97,7 +97,7 @@ export async function openSegmentConfigurator(
 		: [];
 
 	await openSettingsView(ctx, {
-		title: "pi-statusline visibility",
+		title: "pi-info visibility",
 		subtitle:
 			knownStatusKeys.length > 0
 				? "Footer segments + extension statuses · Enter/Space toggles · Esc closes"

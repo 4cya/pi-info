@@ -1,11 +1,11 @@
 /**
- * Persistent global config (~/.pi/agent/pi-statusline.json) and environment
+ * Persistent global config (~/.pi/agent/pi-info.json) and environment
  * variable parsing.
  *
  * Environment variables:
- *   PI_STATUSLINE_SHOW        comma-separated list of segments to show
- *   PI_STATUSLINE_THRESHOLDS  warning,danger context-usage percentages
- *   PI_STATUSLINE_CONFIG      override the persisted config path
+ *   PI_INFO_SHOW              comma-separated list of segments to show
+ *   PI_INFO_THRESHOLDS        warning,danger context-usage percentages
+ *   PI_INFO_CONFIG            override the persisted config path
  */
 
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
@@ -33,8 +33,8 @@ export type GlobalConfig = {
 };
 
 export const CONFIG_PATH =
-	process.env.PI_STATUSLINE_CONFIG ??
-	join(homedir(), ".pi", "agent", "pi-statusline.json");
+	process.env.PI_INFO_CONFIG ??
+	join(homedir(), ".pi", "agent", "pi-info.json");
 
 /** Normalize to canonical order and drop unknown names. */
 export function serializeSegments(segments: readonly SegmentName[]): SegmentName[] {
@@ -57,7 +57,7 @@ export function splitSegmentNames(raw: string): SegmentName[] {
 }
 
 export function parseSegmentsEnv(): SegmentName[] {
-	const raw = process.env.PI_STATUSLINE_SHOW;
+	const raw = process.env.PI_INFO_SHOW;
 	if (!raw) return DEFAULT_SEGMENTS;
 
 	const requested = raw
@@ -69,7 +69,7 @@ export function parseSegmentsEnv(): SegmentName[] {
 }
 
 export function parseThresholds(): { warningThreshold: number; errorThreshold: number } {
-	const raw = process.env.PI_STATUSLINE_THRESHOLDS;
+	const raw = process.env.PI_INFO_THRESHOLDS;
 	if (!raw) {
 		return {
 			warningThreshold: DEFAULT_WARNING_THRESHOLD,
@@ -130,7 +130,7 @@ export function writeGlobalConfig(patch: Partial<GlobalConfig>): void {
 
 /** Env var wins over persisted config so launch-time overrides stay possible. */
 export function readGlobalSegments(): SegmentName[] | null {
-	return process.env.PI_STATUSLINE_SHOW
+	return process.env.PI_INFO_SHOW
 		? parseSegmentsEnv()
 		: readGlobalConfig().segments ?? null;
 }

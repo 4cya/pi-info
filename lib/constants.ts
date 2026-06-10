@@ -27,7 +27,7 @@ export const SEGMENT_SEPARATOR = "❯";
 export const EXTENSION_STATUS_SEPARATOR = SEGMENT_SEPARATOR;
 
 /** Session entry type used to persist the status filter in session trees. */
-export const STATUS_FILTER_ENTRY_TYPE = "pi-statusline-status-filter";
+export const STATUS_FILTER_ENTRY_TYPE = "pi-info-status-filter";
 
 export function isSegmentName(value: string): value is SegmentName {
 	return (ALL_SEGMENTS as readonly string[]).includes(value);

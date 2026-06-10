@@ -1,5 +1,5 @@
 /**
- * /statusline order — reorder segment display. Space cycles move up/down;
+ * /info order — reorder segment display. Space cycles move up/down;
  * Enter opens an inline input to type a target position directly.
  *
  * The view closes after each move because SettingsList labels (which embed

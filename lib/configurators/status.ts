@@ -1,5 +1,5 @@
 /**
- * /statusline status — fine-grained filter for extension status keys.
+ * /info status — fine-grained filter for extension status keys.
  */
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -15,7 +15,7 @@ export async function openStatusConfigurator(
 	const knownStatusKeys = getKnownStatusKeys(deps.getStatusFilter(), deps.seenStatusKeys);
 	if (knownStatusKeys.length === 0) {
 		ctx.ui.notify(
-			"No extension statuses seen yet. Open /statusline after another extension calls ctx.ui.setStatus().",
+			"No extension statuses seen yet. Open /info after another extension calls ctx.ui.setStatus().",
 			"info",
 		);
 		return;
@@ -57,7 +57,7 @@ export async function openStatusConfigurator(
 	];
 
 	await openSettingsView(ctx, {
-		title: "pi-statusline status visibility",
+		title: "pi-info status visibility",
 		subtitle: "Enter/Space toggles · Esc closes",
 		items,
 		maxRows: 15,

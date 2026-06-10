@@ -1,14 +1,14 @@
 {
-	"name": "pi-statusline",
+	"name": "pi-info",
 	"version": "0.1.0",
-	"description": "Modular, configurable statusline for pi: model, thinking level, context pressure, cost/cache/token segments, and extension statuses.",
+	"description": "Modular, configurable info bar for pi: model, thinking level, context pressure, cost/cache/token segments, and extension statuses.",
 	"type": "module",
 	"keywords": [
 		"pi-package",
 		"pi-extension",
 		"pi",
-		"pi-statusline",
-		"statusline",
+		"pi-info",
+		"info-bar",
 		"footer",
 		"model",
 		"thinking",
@@ -18,12 +18,12 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/moesin-lab/pi-statusline.git"
+		"url": "git+https://github.com/moesin-lab/pi-info.git"
 	},
 	"bugs": {
-		"url": "https://github.com/moesin-lab/pi-statusline/issues"
+		"url": "https://github.com/moesin-lab/pi-info/issues"
 	},
-	"homepage": "https://github.com/moesin-lab/pi-statusline#readme",
+	"homepage": "https://github.com/moesin-lab/pi-info#readme",
 	"files": [
 		"extensions",
 		"lib",

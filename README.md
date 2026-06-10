@@ -1,8 +1,8 @@
-# pi-statusline
+# pi-info
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-A modular, fully configurable statusline for [pi](https://pi.dev). Everything you need to see at a glance — active model, thinking level, context pressure, spend, and extension statuses — in one calm footer line.
+A modular, fully configurable info bar for [pi](https://pi.dev). Everything you need to see at a glance — active model, thinking level, context pressure, spend, and extension statuses — in one calm footer line.
 
 ```text
 claude-opus-4.7  ❯  think:med  ❯  2.6% / 1.0M  ❯  $0.412  ❯  ↑12k ↓3.4k  ❯  ~/projects/app
@@ -14,19 +14,19 @@ claude-opus-4.7  ❯  think:med  ❯  2.6% / 1.0M  ❯  $0.412  ❯  ↑12k ↓3
 - **Thinking level** — instantly notice a wrong reasoning setting.
 - **Context pressure** — usage turns green → yellow → red as you approach the window limit.
 - **Spend tracking** — optional cost, cache-hit, and token I/O segments.
-- **Pluggable segments** — any extension can register its own segment with one function call; pi-statusline stays a pure display layer.
+- **Pluggable segments** — any extension can register its own segment with one function call; pi-info stays a pure display layer.
 - **Fully configurable** — toggle, recolor, and reorder every segment from inside pi; settings persist across sessions.
 
 ## Quick start
 
 ```bash
-pi install npm:pi-statusline
+pi install npm:pi-info
 ```
 
 Already running? `/reload`, then open the configurator:
 
 ```text
-/statusline
+/info
 ```
 
 ## Segments
@@ -46,32 +46,32 @@ Segments hide automatically when they have nothing to show.
 
 ## Configuration
 
-### `/statusline` command
+### `/info` command
 
 | Subcommand | What it does |
 | --- | --- |
-| `/statusline segments` | Show/hide any segment, including extension statuses |
-| `/statusline status` | Fine-grained filter for extension status keys |
-| `/statusline color` | Per-segment colors — theme names or `#RRGGBB` |
-| `/statusline order` | Reorder segments |
-| `/statusline list` | Print current config |
+| `/info segments` | Show/hide any segment, including extension statuses |
+| `/info status` | Fine-grained filter for extension status keys |
+| `/info color` | Per-segment colors — theme names or `#RRGGBB` |
+| `/info order` | Reorder segments |
+| `/info list` | Print current config |
 
-Settings persist to `~/.pi/agent/pi-statusline.json` and apply to all sessions.
+Settings persist to `~/.pi/agent/pi-info.json` and apply to all sessions.
 
 ### Environment variables
 
 | Variable | Purpose | Example |
 | --- | --- | --- |
-| `PI_STATUSLINE_SHOW` | Startup default segments | `model,context` |
-| `PI_STATUSLINE_THRESHOLDS` | Context warning,danger percentages | `70,90` |
-| `PI_STATUSLINE_CONFIG` | Override config file path | `/tmp/sl.json` |
+| `PI_INFO_SHOW` | Startup default segments | `model,context` |
+| `PI_INFO_THRESHOLDS` | Context warning,danger percentages | `70,90` |
+| `PI_INFO_CONFIG` | Override config file path | `/tmp/sl.json` |
 
 ## Extending: custom segments
 
-pi-statusline is a display layer: it renders segments, and anything can be a segment. Register one from any pi extension or script:
+pi-info is a display layer: it renders segments, and anything can be a segment. Register one from any pi extension or script:
 
 ```ts
-import { registerSegment } from "pi-statusline/extensions/statusline.js";
+import { registerSegment } from "pi-info/extensions/statusline.js";
 
 registerSegment({
 	name: "git-branch",
@@ -83,12 +83,12 @@ registerSegment({
 });
 ```
 
-Registered segments automatically appear in `/statusline segments`, `color`, and `order`, and their visibility persists. Extensions can also surface lightweight one-off badges through pi's `ctx.ui.setStatus()`, which show up in the `extensions` segment.
+Registered segments automatically appear in `/info segments`, `color`, and `order`, and their visibility persists. Extensions can also surface lightweight one-off badges through pi's `ctx.ui.setStatus()`, which show up in the `extensions` segment.
 
 ## Architecture
 
 ```text
-extensions/statusline.ts   entry: event wiring, /statusline command, footer install
+extensions/statusline.ts   entry: event wiring, /info command, footer install
 lib/
   constants.ts             segment names, labels, defaults
   config.ts                persisted config + env parsing
@@ -96,7 +96,7 @@ lib/
   registry.ts              dynamic segment registry (registerSegment API)
   footer.ts                footer line renderer
   status-filter.ts         extension-status filtering
-  configurators/           /statusline TUI configurators
+  configurators/           /info TUI configurators
 segments/                  SegmentProvider interface + built-in providers
 ```
 

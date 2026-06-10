@@ -1,11 +1,11 @@
 import type { ExtensionContext, ThemeColor } from "@earendil-works/pi-coding-agent";
 
 /**
- * A pi-statusline footer segment.
+ * A pi-info footer segment.
  *
- * Each segment exports a SegmentProvider as its default export. pi-statusline
+ * Each segment exports a SegmentProvider as its default export. pi-info
  * registers built-in providers at startup; other extensions can register
- * their own via `registerSegment`. Use /statusline to toggle visibility.
+ * their own via `registerSegment`. Use /info to toggle visibility.
  *
  * Example (./segments/git-branch.ts):
  *   const gitBranch: SegmentProvider = {
@@ -17,9 +17,9 @@ import type { ExtensionContext, ThemeColor } from "@earendil-works/pi-coding-age
  *   export default gitBranch;
  */
 export interface SegmentProvider {
-	/** Unique segment identifier. Used in /statusline and config persistence. */
+	/** Unique segment identifier. Used in /info and config persistence. */
 	name: string;
-	/** Human-readable label shown in the /statusline menu. */
+	/** Human-readable label shown in the /info menu. */
 	label: string;
 	/**
 	 * Produce the segment text (or null to hide).

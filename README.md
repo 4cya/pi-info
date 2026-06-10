@@ -2,7 +2,7 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-<img src="assets/cover.png" alt="pi-info cover" width="800" />
+<p align="center"><img src="assets/cover.png" alt="pi-info cover" width="800" /></p>
 
 A modular, fully configurable info bar for [pi](https://pi.dev). Everything you need to see at a glance — active model, thinking level, context pressure, spend, and extension statuses — in one calm footer line.
 
@@ -19,7 +19,7 @@ claude-opus-4.7  ❯  think:med  ❯  2.6% / 1.0M  ❯  $0.412  ❯  ↑12k ↓3
 - **Pluggable segments** — any extension can register its own segment with one function call; pi-info stays a pure display layer.
 - **Fully configurable** — toggle, recolor, and reorder every segment from inside pi; settings persist across sessions.
 
-<img src="assets/basic.png" alt="pi-info statusline in action" width="700" />
+<p align="center"><img src="assets/basic.png" alt="pi-info statusline in action" width="700" /></p>
 
 ## Quick start
 
@@ -50,7 +50,7 @@ Segments hide automatically when they have nothing to show.
 
 ## Configuration
 
-<img src="assets/config.png" alt="pi-info configurator TUI" width="700" />
+<p align="center"><img src="assets/config.png" alt="pi-info configurator TUI" width="700" /></p>
 
 ### `/info` command
 
@@ -64,11 +64,11 @@ Segments hide automatically when they have nothing to show.
 
 **Segment visibility:**
 
-<img src="assets/visibility.png" alt="segment visibility toggle" width="600" />
+<p align="center"><img src="assets/visibility.png" alt="segment visibility toggle" width="600" /></p>
 
 **Color configuration:**
 
-<img src="assets/color.png" alt="color configuration" width="600" />
+<p align="center"><img src="assets/color.png" alt="color configuration" width="600" /></p>
 
 Settings persist to `~/.pi/agent/pi-info.json` and apply to all sessions.
 

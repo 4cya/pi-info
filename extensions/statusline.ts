@@ -42,7 +42,7 @@ import {
 	type SegmentName,
 } from "../lib/constants.js";
 import { renderFooterLine } from "../lib/footer.js";
-import { visibleDynamic } from "../lib/registry.js";
+import { registeredSegments, visibleDynamic } from "../lib/registry.js";
 import {
 	parseSerializedStatusFilter,
 	serializeStatusFilter,
@@ -62,6 +62,10 @@ export default function (pi: ExtensionAPI) {
 	if (initialConfig.dynamicSegments) {
 		visibleDynamic.clear();
 		for (const name of initialConfig.dynamicSegments) visibleDynamic.add(name);
+	}
+	// Ensure newly registered built-in dynamic segments are visible.
+	for (const [name] of registeredSegments) {
+		if (!visibleDynamic.has(name)) visibleDynamic.add(name);
 	}
 	const segmentColors: Record<string, string> = initialConfig.segmentColors ?? {};
 	let segmentOrder: Record<string, number> = initialConfig.segmentOrder ?? {};

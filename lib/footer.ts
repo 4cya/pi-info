@@ -2,55 +2,70 @@
  * Footer line rendering: turns current state (model, thinking level, context
  * usage, extension statuses, dynamic segments) into the single styled line pi
  * displays.
+ *
+ * Every segment renders through the same pipeline: a variable map + a format
+ * template (the segment's default or the user's per-segment override), then
+ * styled runs are colored — plain runs with the segment's base color,
+ * [..](style) runs with their own style ("auto" = the segment's semantic
+ * color, e.g. context's threshold color).
  */
 
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import {
 	applyColor,
+	applyStyle,
 	contextColor,
 	thinkingColor,
 } from "./colors.js";
+import type { SegmentConfig, SeparatorConfig } from "./config.js";
 import {
-	EXTENSION_STATUS_SEPARATOR,
 	SEGMENT_SEPARATOR,
 	type SegmentName,
 } from "./constants.js";
 import { registeredSegments, visibleDynamic } from "./registry.js";
 import { shouldShowStatus, type StatusFilter } from "./status-filter.js";
+import { renderTemplate, runsText, trimRuns, type StyledRun } from "./template.js";
 import { formatModelName, formatTokens, stripTerminalControls } from "./text.js";
 
 export type FooterRenderState = {
 	visibleSegments: readonly SegmentName[];
 	statusFilter: StatusFilter;
-	segmentColors: Record<string, string>;
-	segmentOrder: Record<string, number>;
+	segmentConfigs: Record<string, SegmentConfig>;
 	seenStatusKeys: Set<string>;
 	warningThreshold: number;
 	errorThreshold: number;
 	thinkingLevel: string;
+	separator?: SeparatorConfig;
+};
+
+/** A segment ready for the template pipeline. */
+type SegmentSpec = {
+	vars: Record<string, string>;
+	defaultFormat: string;
+	/** Semantic default color; resolves "auto" in templates. */
+	autoColor: string;
 };
 
 /**
- * Filter + sanitize extension statuses into "key:text" parts.
+ * Filter + sanitize extension statuses into {key, text} pairs.
  * Also records every key seen so the configurators can list them later.
  */
 export function formatExtensionStatuses(
 	statuses: ReadonlyMap<string, string>,
 	filter: StatusFilter,
 	seenStatusKeys: Set<string>,
-): string[] | null {
-	const parts = Array.from(statuses.entries())
+): { key: string; text: string }[] {
+	return Array.from(statuses.entries())
 		.filter(([, text]) => stripTerminalControls(text).trim().length > 0)
 		.filter(([key]) => {
 			seenStatusKeys.add(key);
 			return shouldShowStatus(key, filter);
 		})
-		.map(([key, text]) =>
-			`${stripTerminalControls(key)}:${stripTerminalControls(text)}`,
-		);
-
-	return parts.length > 0 ? parts : null;
+		.map(([key, text]) => ({
+			key: stripTerminalControls(key),
+			text: stripTerminalControls(text),
+		}));
 }
 
 export function renderFooterLine(
@@ -60,72 +75,123 @@ export function renderFooterLine(
 	state: FooterRenderState,
 	extensionStatuses: ReadonlyMap<string, string>,
 ): string {
-	const colorOf = (name: string, fallback: string, text: string): string => {
-		const override = state.segmentColors[name];
-		return applyColor(override ?? fallback, theme, text);
+	// Template pipeline: format → styled runs → colored text. Returns null
+	// when the rendered text is empty (e.g. all optional groups vanished).
+	const renderSpec = (name: string, spec: SegmentSpec): string | null => {
+		const cfg = state.segmentConfigs[name];
+		const format = cfg?.format ?? spec.defaultFormat;
+		let runs: StyledRun[];
+		try {
+			runs = renderTemplate(format, spec.vars);
+		} catch {
+			// Broken user template: show it literally so the problem is visible.
+			runs = [{ text: format, style: null }];
+		}
+		runs = trimRuns(runs);
+		if (!runsText(runs)) return null;
+		const baseColor = cfg?.color ?? spec.autoColor;
+		return runs
+			.map((run) =>
+				run.style
+					? applyStyle(run.style, theme, run.text, spec.autoColor)
+					: applyColor(baseColor, theme, run.text),
+			)
+			.join("");
 	};
 
-	const modelName = formatModelName(ctx.model?.id);
+	const parts: { key: string; text: string }[] = [];
+	const push = (key: string, text: string | null) => {
+		if (text) parts.push({ key, text });
+	};
+
+	// Built-in segments.
 	const usage = ctx.getContextUsage();
-	const contextText = usage
-		? `${usage.percent !== null ? `${usage.percent.toFixed(1)}%` : "—%"} / ${formatTokens(usage.contextWindow)}`
-		: "—";
-
-	const statusParts = formatExtensionStatuses(
-		extensionStatuses,
-		state.statusFilter,
-		state.seenStatusKeys,
-	);
-	// Color override applies per status part; the separators stay dim.
-	const extensionsText = statusParts
-		? statusParts
-			.map((part) => colorOf("extensions", "text", part))
-			.join(` ${theme.fg("dim", EXTENSION_STATUS_SEPARATOR)} `)
-		: null;
-
-	const builtinRenderers: Record<SegmentName, string | null> = {
-		model: colorOf("model", "accent", modelName),
-		thinking: colorOf(
-			"thinking",
-			thinkingColor(state.thinkingLevel),
-			`think:${state.thinkingLevel}`,
-		),
-		context: colorOf(
-			"context",
-			contextColor(usage?.percent, state.warningThreshold, state.errorThreshold),
-			contextText,
-		),
-		extensions: extensionsText,
+	const builtinSpecs: Record<Exclude<SegmentName, "extensions">, SegmentSpec | null> = {
+		model: {
+			vars: { name: formatModelName(ctx.model?.id), id: ctx.model?.id ?? "" },
+			defaultFormat: "{name}",
+			autoColor: "accent",
+		},
+		thinking: {
+			vars: { level: state.thinkingLevel },
+			defaultFormat: "think:{level}",
+			autoColor: thinkingColor(state.thinkingLevel),
+		},
+		context: usage
+			? {
+				vars: {
+					percent: usage.percent !== null ? usage.percent.toFixed(1) : "—",
+					window: formatTokens(usage.contextWindow),
+				},
+				defaultFormat: "{percent}% / {window}",
+				autoColor: contextColor(usage.percent, state.warningThreshold, state.errorThreshold),
+			}
+			: null,
 	};
 
-	const parts: { key: string; text: string }[] = state.visibleSegments
-		.map((segment) => ({ key: segment as string, text: builtinRenderers[segment] }))
-		.filter((part): part is { key: string; text: string } => part.text !== null);
+	for (const segment of state.visibleSegments) {
+		if (segment === "extensions") {
+			// Each status renders through the template individually; the
+			// separators between statuses stay dim.
+			const statusParts = formatExtensionStatuses(
+				extensionStatuses,
+				state.statusFilter,
+				state.seenStatusKeys,
+			);
+			const rendered = statusParts
+				.map(({ key, text }) =>
+					renderSpec("extensions", {
+						vars: { key, text },
+						defaultFormat: "{key}:{text}",
+						autoColor: "text",
+					}),
+				)
+				.filter((text): text is string => text !== null);
+			if (rendered.length > 0) {
+				push(
+					"extensions",
+					rendered.join(` ${theme.fg("dim", SEGMENT_SEPARATOR)} `),
+				);
+			}
+			continue;
+		}
+		const spec = builtinSpecs[segment];
+		if (spec) push(segment, renderSpec(segment, spec));
+	}
 
-	// Render registered (dynamic) segments that are visible.
+	// Registered (dynamic) segments that are visible.
 	for (const [name, provider] of registeredSegments) {
 		if (!visibleDynamic.has(name)) continue;
 		try {
-			const text = provider.render(ctx);
-			if (text) {
-				const fallback = provider.color ? provider.color(ctx) : "dim";
-				parts.push({ key: name, text: colorOf(name, fallback, text) });
+			let vars: Record<string, string> | null = null;
+			let defaultFormat = provider.defaultFormat ?? "{output}";
+			if (provider.data) {
+				vars = provider.data(ctx);
+			} else if (provider.render) {
+				const output = provider.render(ctx);
+				if (output) vars = { output };
 			}
+			if (!vars) continue;
+			const autoColor = provider.color ? String(provider.color(ctx)) : "dim";
+			push(name, renderSpec(name, { vars, defaultFormat, autoColor }));
 		} catch {
 			// Skip broken segments rather than break the whole footer.
 		}
 	}
 
-	// Apply custom priority order if configured (lower = earlier, ties broken alphabetically).
-	if (Object.keys(state.segmentOrder).length > 0) {
-		parts.sort((a, b) => {
-			const pa = state.segmentOrder[a.key] ?? 999;
-			const pb = state.segmentOrder[b.key] ?? 999;
-			if (pa !== pb) return pa - pb;
-			return a.key.localeCompare(b.key);
-		});
-	}
+	// Apply custom priority order (lower = earlier, ties broken alphabetically).
+	const orderOf = (key: string) => state.segmentConfigs[key]?.order ?? 999;
+	parts.sort((a, b) => {
+		const pa = orderOf(a.key);
+		const pb = orderOf(b.key);
+		if (pa !== pb) return pa - pb;
+		return 0; // keep registration order for ties
+	});
 
-	const separator = `  ${theme.fg("dim", SEGMENT_SEPARATOR)}  `;
+	const separatorChar = state.separator?.char ?? SEGMENT_SEPARATOR;
+	// Empty separator collapses to plain spacing between segments.
+	const separator = separatorChar
+		? `  ${applyColor(state.separator?.color ?? "dim", theme, separatorChar)}  `
+		: "  ";
 	return truncateToWidth(parts.map((part) => part.text).join(separator), width);
 }

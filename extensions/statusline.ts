@@ -7,13 +7,17 @@
  * Example:
  *   claude-opus-4.7  ❯  think:med  ❯  2.6% / 1.0M  ❯  $0.412  ❯  ↑12k ↓3.4k
  *
- * Re-renders on model change, thinking-level change, status updates, and after
- * each assistant turn so context usage stays current.
+ * Every segment renders through a format template ({var} interpolation,
+ * [text](style) spans, (optional groups)) that users can override per
+ * segment — see lib/template.ts. Re-renders on model change, thinking-level
+ * change, status updates, and after each assistant turn.
  *
  * Module layout:
  *   lib/constants.ts       segment names, labels, defaults
- *   lib/config.ts          persisted config + env parsing
+ *   lib/config.ts          persisted per-segment config + env parsing
+ *   lib/template.ts        format template engine
  *   lib/footer.ts          footer line rendering
+ *   lib/presets.ts         one-step format presets
  *   lib/registry.ts        dynamic segment registry (public registerSegment API)
  *   lib/configurators/     /info TUI configurators
  *   segments/              SegmentProvider interface + built-in providers
@@ -27,28 +31,36 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { openColorConfigurator } from "../lib/configurators/colors.js";
 import type { ConfiguratorDeps } from "../lib/configurators/deps.js";
+import { openFormatConfigurator } from "../lib/configurators/format.js";
 import { openOrderConfigurator } from "../lib/configurators/order.js";
 import { openSegmentConfigurator } from "../lib/configurators/segments.js";
+import { openSeparatorConfigurator } from "../lib/configurators/separator.js";
 import {
+	applySegmentPatch,
 	parseThresholds,
 	readGlobalConfig,
 	readGlobalSegments,
 	serializeSegments,
 	writeGlobalConfig,
+	type SegmentConfig,
+	type SeparatorConfig,
 } from "../lib/config.js";
 import {
+	ALL_SEGMENTS,
 	DEFAULT_SEGMENTS,
+	SEGMENT_SEPARATOR,
 	STATUS_FILTER_ENTRY_TYPE,
 	type SegmentName,
 } from "../lib/constants.js";
 import { renderFooterLine } from "../lib/footer.js";
+import { PRESETS, type Preset } from "../lib/presets.js";
 import { registeredSegments, registerSegment, visibleDynamic } from "../lib/registry.js";
-import { createCustomSegment } from "../segments/custom.js";
 import {
 	parseSerializedStatusFilter,
 	serializeStatusFilter,
 	type StatusFilter,
 } from "../lib/status-filter.js";
+import { createCustomSegment } from "../segments/custom.js";
 
 // Public API for other extensions: register custom footer segments.
 export { registerSegment, unregisterSegment } from "../lib/registry.js";
@@ -57,35 +69,49 @@ export type { SegmentProvider } from "../segments/types.js";
 export default function (pi: ExtensionAPI) {
 	let requestRender: (() => void) | undefined;
 	let statusFilter: StatusFilter = { mode: "all", hidden: new Set() };
-	let visibleSegments: SegmentName[] = readGlobalSegments() ?? DEFAULT_SEGMENTS;
+	let segmentConfigs: Record<string, SegmentConfig> = {};
+	let separatorConfig: SeparatorConfig = {};
+	let visibleSegments: SegmentName[] = DEFAULT_SEGMENTS;
 
-	const initialConfig = readGlobalConfig();
-	if (initialConfig.dynamicSegments) {
-		visibleDynamic.clear();
-		for (const name of initialConfig.dynamicSegments) visibleDynamic.add(name);
-	}
-	// Ensure newly registered built-in dynamic segments are visible.
-	for (const [name] of registeredSegments) {
-		if (!visibleDynamic.has(name)) visibleDynamic.add(name);
-	}
-	// Register declarative custom segments from config.
+	const seenStatusKeys = new Set<string>();
+	const refresh = () => requestRender?.();
+
+	// Registry visibility follows the config: hidden entries are removed,
+	// everything else (including unconfigured segments) is visible.
+	const syncDynamicVisibility = () => {
+		for (const [name] of registeredSegments) {
+			if (segmentConfigs[name]?.hidden) visibleDynamic.delete(name);
+			else visibleDynamic.add(name);
+		}
+	};
+
+	// Config entries with a `command` are shell-command segments.
 	const registerCustomSegments = () => {
-		const config = readGlobalConfig();
-		if (!config.customSegments) return;
-		for (const cfg of config.customSegments) {
+		for (const [name, cfg] of Object.entries(segmentConfigs)) {
+			if (!cfg.command) continue;
 			try {
-				registerSegment(createCustomSegment(cfg));
+				registerSegment(createCustomSegment(name, cfg));
 			} catch {
 				// Skip broken custom segments.
 			}
 		}
 	};
-	registerCustomSegments();
-	const segmentColors: Record<string, string> = initialConfig.segmentColors ?? {};
-	let segmentOrder: Record<string, number> = initialConfig.segmentOrder ?? {};
 
-	const seenStatusKeys = new Set<string>();
-	const refresh = () => requestRender?.();
+	const loadConfig = () => {
+		const config = readGlobalConfig();
+		segmentConfigs = config.segments ?? {};
+		separatorConfig = config.separator ?? {};
+		visibleSegments = readGlobalSegments() ?? DEFAULT_SEGMENTS;
+		registerCustomSegments();
+		syncDynamicVisibility();
+	};
+	loadConfig();
+
+	const persistSegments = () => {
+		writeGlobalConfig({ segments: segmentConfigs });
+		syncDynamicVisibility();
+		refresh();
+	};
 
 	const restoreStatusFilter = (ctx: ExtensionContext) => {
 		let restoredFilter = parseSerializedStatusFilter(readGlobalConfig().statusFilter);
@@ -99,12 +125,29 @@ export default function (pi: ExtensionAPI) {
 		statusFilter = restoredFilter ?? { mode: "all", hidden: new Set() };
 	};
 
+	const applyPreset = (preset: Preset) => {
+		const names = new Set([
+			...Object.keys(segmentConfigs),
+			...Object.keys(preset.formats),
+		]);
+		for (const name of names) {
+			segmentConfigs = applySegmentPatch(segmentConfigs, name, {
+				format: preset.formats[name],
+			});
+		}
+		persistSegments();
+	};
+
 	const deps: ConfiguratorDeps = {
 		getVisibleSegments: () => visibleSegments,
 		setVisibleSegments: (segments) => {
 			visibleSegments = serializeSegments(segments);
-			writeGlobalConfig({ segments: visibleSegments });
-			refresh();
+			for (const name of ALL_SEGMENTS) {
+				segmentConfigs = applySegmentPatch(segmentConfigs, name, {
+					hidden: visibleSegments.includes(name) ? undefined : true,
+				});
+			}
+			persistSegments();
 		},
 		getStatusFilter: () => statusFilter,
 		setStatusFilter: (filter) => {
@@ -112,16 +155,23 @@ export default function (pi: ExtensionAPI) {
 			writeGlobalConfig({ statusFilter: serializeStatusFilter(filter) });
 			refresh();
 		},
-		getSegmentColors: () => segmentColors,
-		setSegmentColor: (name, color) => {
-			segmentColors[name] = color;
-			writeGlobalConfig({ segmentColors: { ...segmentColors } });
+		getSegmentConfigs: () => segmentConfigs,
+		updateSegmentConfig: (name, patch) => {
+			segmentConfigs = applySegmentPatch(segmentConfigs, name, patch);
+			persistSegments();
+		},
+		getSeparator: () => ({
+			char: separatorConfig.char ?? SEGMENT_SEPARATOR,
+			color: separatorConfig.color ?? "dim",
+		}),
+		setSeparator: (char) => {
+			separatorConfig = { ...separatorConfig, char };
+			writeGlobalConfig({ separator: separatorConfig });
 			refresh();
 		},
-		getSegmentOrder: () => segmentOrder,
-		setSegmentOrder: (order) => {
-			segmentOrder = order;
-			writeGlobalConfig({ segmentOrder: order });
+		setSeparatorColor: (color) => {
+			separatorConfig = { ...separatorConfig, color };
+			writeGlobalConfig({ separator: separatorConfig });
 			refresh();
 		},
 		seenStatusKeys,
@@ -132,7 +182,7 @@ export default function (pi: ExtensionAPI) {
 		description: "Configure the pi-info footer",
 		getArgumentCompletions(prefix: string) {
 			const word = prefix.trim().split(/\s+/).filter(Boolean).pop() ?? "";
-			const items = ["segments", "color", "order"];
+			const items = ["segments", "color", "order", "separator", "format", "preset"];
 			return items
 				.filter((item) => item.startsWith(word))
 				.map((item) => ({ value: item, label: item }));
@@ -152,6 +202,26 @@ export default function (pi: ExtensionAPI) {
 					case "order":
 						await openOrderConfigurator(ctx, deps);
 						return true;
+					case "separator":
+					case "sep":
+						await openSeparatorConfigurator(ctx, deps);
+						return true;
+					case "format":
+					case "formats":
+						await openFormatConfigurator(ctx, deps);
+						return true;
+					case "preset":
+					case "presets": {
+						const choice = await ctx.ui.select(
+							"Format preset",
+							PRESETS.map((preset) => `${preset.name} — ${preset.description}`),
+						);
+						const preset = choice
+							? PRESETS.find((p) => choice.startsWith(p.name))
+							: undefined;
+						if (preset) applyPreset(preset);
+						return true;
+					}
 					default:
 						return false;
 				}
@@ -160,9 +230,12 @@ export default function (pi: ExtensionAPI) {
 			if (await route(direct)) return;
 
 			const choice = await ctx.ui.select("pi-info", [
-				"segments — show/hide footer segments",
-				"color    — change segment colors",
-				"order    — reorder segment display",
+				"segments  — show/hide footer segments",
+				"color     — change segment colors",
+				"order     — reorder segment display",
+				"separator — change the segment separator",
+				"format    — edit segment format templates",
+				"preset    — apply a format preset",
 			]);
 			if (!choice) return;
 			await route(choice.split(/\s+—/)[0].trim());
@@ -179,9 +252,8 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
-		visibleSegments = readGlobalSegments() ?? DEFAULT_SEGMENTS;
+		loadConfig();
 		restoreStatusFilter(ctx);
-		registerCustomSegments();
 
 		if (!ctx.hasUI) return;
 
@@ -204,12 +276,12 @@ export default function (pi: ExtensionAPI) {
 							{
 								visibleSegments,
 								statusFilter,
-								segmentColors,
-								segmentOrder,
+								segmentConfigs,
 								seenStatusKeys,
 								warningThreshold,
 								errorThreshold,
 								thinkingLevel: String(pi.getThinkingLevel()),
+								separator: separatorConfig,
 							},
 							footerData?.getExtensionStatuses?.() ?? new Map(),
 						),

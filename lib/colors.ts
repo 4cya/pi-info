@@ -45,6 +45,48 @@ export function applyColor(
 	return theme.fg(color as ThemeColor, text);
 }
 
+const STYLE_MODIFIERS = new Set(["bold", "italic", "underline"]);
+
+/** True when every token is a color, "auto", or a style modifier. */
+export function isValidStyle(style: string): boolean {
+	return style
+		.split(/\s+/)
+		.filter(Boolean)
+		.every((token) => {
+			const lower = token.toLowerCase();
+			return lower === "auto" || STYLE_MODIFIERS.has(lower) || isValidColor(token);
+		});
+}
+
+/**
+ * Applies a template style string ("bold #f38ba8", "auto underline", …).
+ * "auto" resolves to autoColor — the segment's semantic default.
+ */
+export function applyStyle(
+	style: string,
+	theme: { fg: (c: ThemeColor, t: string) => string },
+	text: string,
+	autoColor: string,
+): string {
+	let color: string | null = null;
+	let bold = false;
+	let italic = false;
+	let underline = false;
+	for (const token of style.split(/\s+/).filter(Boolean)) {
+		const lower = token.toLowerCase();
+		if (lower === "bold") bold = true;
+		else if (lower === "italic") italic = true;
+		else if (lower === "underline") underline = true;
+		else if (lower === "auto") color = autoColor;
+		else if (isValidColor(token)) color = token;
+	}
+	let out = color ? applyColor(color, theme, text) : text;
+	if (bold) out = `\x1b[1m${out}\x1b[22m`;
+	if (italic) out = `\x1b[3m${out}\x1b[23m`;
+	if (underline) out = `\x1b[4m${out}\x1b[24m`;
+	return out;
+}
+
 export function thinkingColor(level: string): ThemeColor {
 	switch (level) {
 		case "off":

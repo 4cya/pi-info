@@ -11,7 +11,7 @@ import { registeredSegments } from "../registry.js";
 import type { ConfiguratorDeps } from "./deps.js";
 import { openSettingsView } from "./view.js";
 
-const PRESET_COLORS = [
+export const PRESET_COLORS = [
 	"dim", "muted", "text", "accent",
 	"#a6adc8", "#89b4fa", "#a6e3a1", "#f38ba8",
 	"#fab387", "#f9e2af", "#cba6f7",
@@ -22,7 +22,7 @@ export async function openColorConfigurator(
 	deps: ConfiguratorDeps,
 ): Promise<void> {
 	const allNames = [...ALL_SEGMENTS, ...registeredSegments.keys()];
-	const segmentColors = deps.getSegmentColors();
+	const configs = deps.getSegmentConfigs();
 
 	const items: SettingItem[] = allNames.map((name): SettingItem => {
 		const provider = registeredSegments.get(name);
@@ -32,8 +32,8 @@ export async function openColorConfigurator(
 		const defaultColor = provider?.color
 			? String(provider.color({} as ExtensionContext))
 			: "dim";
-		const current = segmentColors[name] ?? defaultColor;
-		const hasOverride = name in segmentColors;
+		const current = configs[name]?.color ?? defaultColor;
+		const hasOverride = configs[name]?.color !== undefined;
 		const values = [
 			...PRESET_COLORS,
 			...(PRESET_COLORS.includes(current) ? [] : [current]),
@@ -66,7 +66,7 @@ export async function openColorConfigurator(
 		items,
 		onChange: (id, newValue) => {
 			if (!id.startsWith("color:")) return;
-			deps.setSegmentColor(id.slice("color:".length), newValue);
+			deps.updateSegmentConfig(id.slice("color:".length), { color: newValue });
 		},
 	});
 }

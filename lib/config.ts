@@ -2,6 +2,16 @@
  * Persistent global config (~/.pi/agent/pi-info.json) and environment
  * variable parsing.
  *
+ * Schema: one config object per segment, keyed by segment name.
+ *   {
+ *     "separator": { "char": "❯", "color": "dim" },
+ *     "segments": {
+ *       "model": { "format": " {name}", "color": "accent", "order": 1 },
+ *       "io": false,
+ *       "weather": { "command": "curl -s 'wttr.in?format=%t'", "interval": 300 }
+ *     }
+ *   }
+ *
  * Environment variables:
  *   PI_INFO_SHOW              comma-separated list of segments to show
  *   PI_INFO_THRESHOLDS        warning,danger context-usage percentages
@@ -21,26 +31,35 @@ import {
 } from "./constants.js";
 import type { SerializedStatusFilter } from "./status-filter.js";
 
-export type CustomSegmentConfig = {
-	name: string;
-	label: string;
-	command: string;
+export type SegmentConfig = {
+	/** Hide the segment. JSON shorthand: `"name": false`. */
+	hidden?: boolean;
+	/** Template string (see lib/template.ts). Omit for the segment's default. */
+	format?: string;
+	/** Base color (hex or theme name) for untemplated text. */
 	color?: string;
-	/** Cache stdout for this many seconds (0 = always re-run). Default 60. */
+	/** Display priority; lower = earlier. Default 999. */
+	order?: number;
+	/** Shell-command segments: label shown in /info. Defaults to the name. */
+	label?: string;
+	/** Shell-command segments: command whose stdout becomes {output}. */
+	command?: string;
+	/** Shell-command segments: cache stdout for this many seconds. Default 60. */
 	interval?: number;
+};
+
+export type SeparatorConfig = {
+	/** Separator string between segments. Default "❯". */
+	char?: string;
+	/** Separator color (hex or theme color). Default "dim". */
+	color?: string;
 };
 
 export type GlobalConfig = {
 	statusFilter?: SerializedStatusFilter;
-	segments?: SegmentName[];
-	/** Visible dynamic (registered) segment names. */
-	dynamicSegments?: string[];
-	/** Per-segment color overrides (segment name → hex or theme color). */
-	segmentColors?: Record<string, string>;
-	/** Per-segment priority numbers (segment name → number). Lower = earlier. */
-	segmentOrder?: Record<string, number>;
-	/** Declarative custom segments that run shell commands. */
-	customSegments?: CustomSegmentConfig[];
+	separator?: SeparatorConfig;
+	/** Per-segment overrides; `false` hides a segment. */
+	segments?: Record<string, SegmentConfig>;
 };
 
 export const CONFIG_PATH =
@@ -50,14 +69,6 @@ export const CONFIG_PATH =
 /** Normalize to canonical order and drop unknown names. */
 export function serializeSegments(segments: readonly SegmentName[]): SegmentName[] {
 	return ALL_SEGMENTS.filter((segment) => segments.includes(segment));
-}
-
-export function parseSerializedSegments(value: unknown): SegmentName[] | null {
-	if (!Array.isArray(value)) return null;
-	const segments = value.filter(
-		(segment): segment is SegmentName => typeof segment === "string" && isSegmentName(segment),
-	);
-	return serializeSegments(segments);
 }
 
 export function splitSegmentNames(raw: string): SegmentName[] {
@@ -107,47 +118,84 @@ export function parseThresholds(): { warningThreshold: number; errorThreshold: n
 	};
 }
 
+/** Validates one segment entry; `false` is shorthand for { hidden: true }. */
+function sanitizeSegmentConfig(value: unknown): SegmentConfig | null {
+	if (value === false) return { hidden: true };
+	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+	const v = value as Record<string, unknown>;
+	const out: SegmentConfig = {};
+	if (typeof v.hidden === "boolean") out.hidden = v.hidden;
+	if (typeof v.format === "string") out.format = v.format;
+	if (typeof v.color === "string") out.color = v.color;
+	if (typeof v.order === "number") out.order = v.order;
+	if (typeof v.label === "string") out.label = v.label;
+	if (typeof v.command === "string") out.command = v.command;
+	if (typeof v.interval === "number") out.interval = v.interval;
+	return out;
+}
+
 export function readGlobalConfig(): GlobalConfig {
 	try {
 		const data = JSON.parse(readFileSync(CONFIG_PATH, "utf8")) as Record<string, unknown>;
-		return {
+		const config: GlobalConfig = {
 			statusFilter: (data.statusFilter as SerializedStatusFilter | undefined) ?? undefined,
-			segments: parseSerializedSegments(data.segments) ?? undefined,
-			dynamicSegments: Array.isArray(data.dynamicSegments)
-				? data.dynamicSegments.filter((name): name is string => typeof name === "string")
-				: undefined,
-			segmentColors:
-				data.segmentColors && typeof data.segmentColors === "object" && !Array.isArray(data.segmentColors)
-					? (data.segmentColors as Record<string, string>)
-					: undefined,
-			segmentOrder:
-				data.segmentOrder && typeof data.segmentOrder === "object" && !Array.isArray(data.segmentOrder)
-					? Object.fromEntries(
-						Object.entries(data.segmentOrder as Record<string, unknown>).filter(
-							(entry): entry is [string, number] =>
-								typeof entry[0] === "string" && typeof entry[1] === "number",
-						),
-					)
-					: undefined,
-			customSegments: Array.isArray(data.customSegments)
-				? data.customSegments.filter(
-					(c): c is CustomSegmentConfig =>
-						typeof c === "object" &&
-						c !== null &&
-						typeof (c as CustomSegmentConfig).name === "string" &&
-						typeof (c as CustomSegmentConfig).label === "string" &&
-						typeof (c as CustomSegmentConfig).command === "string",
-				)
-				: undefined,
 		};
+		if (data.separator && typeof data.separator === "object" && !Array.isArray(data.separator)) {
+			const sep = data.separator as Record<string, unknown>;
+			config.separator = {
+				char: typeof sep.char === "string" ? sep.char : undefined,
+				color: typeof sep.color === "string" ? sep.color : undefined,
+			};
+		}
+		if (data.segments && typeof data.segments === "object" && !Array.isArray(data.segments)) {
+			const segments: Record<string, SegmentConfig> = {};
+			for (const [name, value] of Object.entries(data.segments)) {
+				const cfg = sanitizeSegmentConfig(value);
+				if (cfg) segments[name] = cfg;
+			}
+			config.segments = segments;
+		}
+		return config;
 	} catch {
 		return {};
 	}
 }
 
+/**
+ * Merge a patch into one segment's entry. `undefined` patch values delete
+ * the key; entries that end up empty are dropped. Pure — returns a new map.
+ */
+export function applySegmentPatch(
+	segments: Record<string, SegmentConfig>,
+	name: string,
+	patch: Partial<SegmentConfig>,
+): Record<string, SegmentConfig> {
+	const entry: Record<string, unknown> = { ...(segments[name] ?? {}) };
+	for (const [key, value] of Object.entries(patch)) {
+		if (value === undefined) delete entry[key];
+		else entry[key] = value;
+	}
+	const next = { ...segments };
+	if (Object.keys(entry).length === 0) delete next[name];
+	else next[name] = entry as SegmentConfig;
+	return next;
+}
+
 export function writeGlobalConfig(patch: Partial<GlobalConfig>): void {
 	const config = { ...readGlobalConfig(), ...patch };
-	const data = JSON.stringify(config, null, 2);
+	// Compact serialization: { hidden: true } alone becomes `false`.
+	const serializable = {
+		...config,
+		segments: config.segments
+			? Object.fromEntries(
+				Object.entries(config.segments).map(([name, cfg]) => [
+					name,
+					cfg.hidden === true && Object.keys(cfg).length === 1 ? false : cfg,
+				]),
+			)
+			: undefined,
+	};
+	const data = JSON.stringify(serializable, null, 2);
 	mkdirSync(dirname(CONFIG_PATH), { recursive: true });
 	// Write-then-rename keeps the config readable by concurrent pi sessions.
 	const tmpPath = `${CONFIG_PATH}.${process.pid}.tmp`;
@@ -157,7 +205,8 @@ export function writeGlobalConfig(patch: Partial<GlobalConfig>): void {
 
 /** Env var wins over persisted config so launch-time overrides stay possible. */
 export function readGlobalSegments(): SegmentName[] | null {
-	return process.env.PI_INFO_SHOW
-		? parseSegmentsEnv()
-		: readGlobalConfig().segments ?? null;
+	if (process.env.PI_INFO_SHOW) return parseSegmentsEnv();
+	const segments = readGlobalConfig().segments;
+	if (!segments) return null;
+	return ALL_SEGMENTS.filter((name) => segments[name]?.hidden !== true);
 }

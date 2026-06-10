@@ -18,7 +18,12 @@ export async function openOrderConfigurator(
 	const visibleBuiltin = deps.getVisibleSegments();
 	const visibleDynamicNames = [...registeredSegments.keys()].filter((name) => visibleDynamic.has(name));
 	const allKeys = [...visibleBuiltin, ...visibleDynamicNames];
-	const savedOrder = deps.getSegmentOrder();
+	const configs = deps.getSegmentConfigs();
+	const savedOrder: Record<string, number> = {};
+	for (const key of allKeys) {
+		const order = configs[key]?.order;
+		if (order !== undefined) savedOrder[key] = order;
+	}
 
 	const labelMap = new Map<string, string>();
 	for (const segment of ALL_SEGMENTS) labelMap.set(segment, SEGMENT_LABELS[segment]);
@@ -69,10 +74,8 @@ export async function openOrderConfigurator(
 				ctx.ui.notify(`Invalid priority "${newValue}".`, "warning");
 				return;
 			}
-			const next = { ...deps.getSegmentOrder(), [name]: num };
-			// Remove entries that match the default (999) to keep config lean.
-			if (num === 999) delete next[name];
-			deps.setSegmentOrder(next);
+			// The default (999) is stored as "no override" to keep config lean.
+			deps.updateSegmentConfig(name, { order: num === 999 ? undefined : num });
 		},
 	});
 }

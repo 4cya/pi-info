@@ -1,10 +1,11 @@
 /**
  * State surface the configurators need from the extension entry. The entry
- * owns the mutable session state (visible segments, status filter, colors,
- * order); configurators read and write through this interface so persistence
+ * owns the mutable session state (visible segments, status filter, per-segment
+ * configs); configurators read and write through this interface so persistence
  * and re-rendering stay in one place.
  */
 
+import type { SegmentConfig } from "../config.js";
 import type { SegmentName } from "../constants.js";
 import type { StatusFilter } from "../status-filter.js";
 
@@ -15,10 +16,17 @@ export type ConfiguratorDeps = {
 	getStatusFilter(): StatusFilter;
 	/** Persists and re-renders. */
 	setStatusFilter(filter: StatusFilter): void;
-	getSegmentColors(): Record<string, string>;
-	setSegmentColor(name: string, color: string): void;
-	getSegmentOrder(): Record<string, number>;
-	setSegmentOrder(order: Record<string, number>): void;
+	getSegmentConfigs(): Record<string, SegmentConfig>;
+	/**
+	 * Merge a patch into one segment's config. `undefined` values delete the
+	 * key (restoring the default). Persists and re-renders.
+	 */
+	updateSegmentConfig(name: string, patch: Partial<SegmentConfig>): void;
+	getSeparator(): { char: string; color: string };
+	/** Persists and re-renders. */
+	setSeparator(char: string): void;
+	/** Persists and re-renders. */
+	setSeparatorColor(color: string): void;
 	seenStatusKeys: Set<string>;
 	refresh(): void;
 };

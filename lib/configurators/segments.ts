@@ -5,7 +5,6 @@
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { SettingItem } from "@earendil-works/pi-tui";
-import { writeGlobalConfig } from "../config.js";
 import {
 	ALL_SEGMENTS,
 	isSegmentName,
@@ -42,10 +41,6 @@ export async function openSegmentConfigurator(
 
 	const persistSegmentsFromVisibility = () => {
 		deps.setVisibleSegments(ALL_SEGMENTS.filter((segment) => segmentVisibility.get(segment)));
-	};
-	const persistDynamicSegments = () => {
-		writeGlobalConfig({ dynamicSegments: Array.from(visibleDynamic) });
-		deps.refresh();
 	};
 	const persistStatusesFromVisibility = () => {
 		if (futureShown) {
@@ -114,10 +109,10 @@ export async function openSegmentConfigurator(
 
 			if (id.startsWith("dyn-segment:")) {
 				const name = id.slice("dyn-segment:".length);
-				dynVisibility.set(name, newValue === "shown");
-				if (newValue === "shown") visibleDynamic.add(name);
-				else visibleDynamic.delete(name);
-				persistDynamicSegments();
+				const shown = newValue === "shown";
+				dynVisibility.set(name, shown);
+				// updateSegmentConfig syncs visibleDynamic from the config.
+				deps.updateSegmentConfig(name, { hidden: shown ? undefined : true });
 				return;
 			}
 

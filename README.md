@@ -20,7 +20,7 @@ claude-opus-4.7  ❯  think:med  ❯  2.6% / 1.0M  ❯  $0.412  ❯  ↑12k ↓3
 ## Quick start
 
 ```bash
-pi install npm:pi-info
+pi install npm:@sentixx/pi-info
 ```
 
 Already running? `/reload`, then open the configurator:
@@ -71,7 +71,7 @@ Settings persist to `~/.pi/agent/pi-info.json` and apply to all sessions.
 pi-info is a display layer: it renders segments, and anything can be a segment. Register one from any pi extension or script:
 
 ```ts
-import { registerSegment } from "pi-info/extensions/statusline.js";
+import { registerSegment } from "@sentixx/pi-info/extensions/statusline.js";
 
 registerSegment({
 	name: "git-branch",

@@ -20,7 +20,7 @@ claude-opus-4.7  ❯  think:med  ❯  2.6% / 1.0M  ❯  $0.412  ❯  ↑12k ↓3
 ## 快速开始
 
 ```bash
-pi install npm:pi-info
+pi install npm:@sentixx/pi-info
 ```
 
 pi 已在运行？先 `/reload`，再打开配置器：
@@ -71,7 +71,7 @@ pi 已在运行？先 `/reload`，再打开配置器：
 pi-info 是纯展示层：它负责渲染，任何东西都可以成为一个 segment。在任何 pi 扩展或脚本里注册：
 
 ```ts
-import { registerSegment } from "pi-info/extensions/statusline.js";
+import { registerSegment } from "@sentixx/pi-info/extensions/statusline.js";
 
 registerSegment({
 	name: "git-branch",

@@ -1,19 +1,17 @@
 {
 	"name": "@sentixx/pi-info",
 	"version": "0.1.0",
-	"description": "Modular, configurable info bar for pi: model, thinking level, context pressure, cost/cache/token segments, and extension statuses.",
+	"description": "Fully customizable statusline for pi — pluggable segments, priority ordering, per-segment colors, and an open registry API so any extension can contribute its own widgets.",
 	"type": "module",
 	"keywords": [
 		"pi-package",
 		"pi-extension",
 		"pi",
-		"pi-info",
-		"info-bar",
+		"statusline",
 		"footer",
-		"model",
-		"thinking",
-		"context",
-		"context-window"
+		"customizable",
+		"pluggable",
+		"segments"
 	],
 	"license": "MIT",
 	"repository": {

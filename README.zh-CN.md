@@ -4,7 +4,7 @@
 
 <p align="center"><img src="assets/cover.png" alt="pi-info cover" width="800" /></p>
 
-[pi](https://pi.dev) 的模块化、完全可配置信息栏。把你需要随时盯着的信息——当前模型、思考等级、上下文压力、花费、扩展状态——收进一行干净的 footer。
+[pi](https://pi.dev) 的完全可定制状态栏。可插拔 segment、优先级排序、逐段配色，外加开放注册 API——任何扩展都能注册自己的组件。内置模型、思考等级、上下文压力、花费、扩展状态等开箱即用的 segment。
 
 ```text
 claude-opus-4.7  ❯  think:med  ❯  2.6% / 1.0M  ❯  $0.412  ❯  ↑12k ↓3.4k  ❯  ~/projects/app

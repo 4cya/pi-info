@@ -4,7 +4,7 @@
 
 <p align="center"><img src="assets/cover.png" alt="pi-info cover" width="800" /></p>
 
-A modular, fully configurable info bar for [pi](https://pi.dev). Everything you need to see at a glance — active model, thinking level, context pressure, spend, and extension statuses — in one calm footer line.
+A fully customizable statusline for [pi](https://pi.dev). Pluggable segments, priority-based ordering, per-segment colors, and an open registry API — any extension can register its own widget. Ships with model, thinking level, context pressure, spend, and extension-status segments out of the box.
 
 ```text
 claude-opus-4.7  ❯  think:med  ❯  2.6% / 1.0M  ❯  $0.412  ❯  ↑12k ↓3.4k  ❯  ~/projects/app

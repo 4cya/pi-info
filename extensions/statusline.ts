@@ -64,7 +64,7 @@ export default function (pi: ExtensionAPI) {
 		for (const name of initialConfig.dynamicSegments) visibleDynamic.add(name);
 	}
 	const segmentColors: Record<string, string> = initialConfig.segmentColors ?? {};
-	let segmentOrder: string[] = initialConfig.segmentOrder ?? [];
+	let segmentOrder: Record<string, number> = initialConfig.segmentOrder ?? {};
 
 	const seenStatusKeys = new Set<string>();
 	const refresh = () => requestRender?.();

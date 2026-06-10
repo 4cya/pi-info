@@ -28,8 +28,8 @@ export type GlobalConfig = {
 	dynamicSegments?: string[];
 	/** Per-segment color overrides (segment name → hex or theme color). */
 	segmentColors?: Record<string, string>;
-	/** Custom segment display order. Unlisted segments appear after listed ones. */
-	segmentOrder?: string[];
+	/** Per-segment priority numbers (segment name → number). Lower = earlier. */
+	segmentOrder?: Record<string, number>;
 };
 
 export const CONFIG_PATH =
@@ -109,9 +109,15 @@ export function readGlobalConfig(): GlobalConfig {
 				data.segmentColors && typeof data.segmentColors === "object" && !Array.isArray(data.segmentColors)
 					? (data.segmentColors as Record<string, string>)
 					: undefined,
-			segmentOrder: Array.isArray(data.segmentOrder)
-				? data.segmentOrder.filter((name): name is string => typeof name === "string")
-				: undefined,
+			segmentOrder:
+				data.segmentOrder && typeof data.segmentOrder === "object" && !Array.isArray(data.segmentOrder)
+					? Object.fromEntries(
+						Object.entries(data.segmentOrder as Record<string, unknown>).filter(
+							(entry): entry is [string, number] =>
+								typeof entry[0] === "string" && typeof entry[1] === "number",
+						),
+					)
+					: undefined,
 		};
 	} catch {
 		return {};

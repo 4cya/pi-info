@@ -24,7 +24,7 @@ export type FooterRenderState = {
 	visibleSegments: readonly SegmentName[];
 	statusFilter: StatusFilter;
 	segmentColors: Record<string, string>;
-	segmentOrder: readonly string[];
+	segmentOrder: Record<string, number>;
 	seenStatusKeys: Set<string>;
 	warningThreshold: number;
 	errorThreshold: number;
@@ -116,10 +116,14 @@ export function renderFooterLine(
 		}
 	}
 
-	// Apply custom order if configured.
-	if (state.segmentOrder.length > 0) {
-		const orderMap = new Map(state.segmentOrder.map((key, idx) => [key, idx]));
-		parts.sort((a, b) => (orderMap.get(a.key) ?? 999) - (orderMap.get(b.key) ?? 999));
+	// Apply custom priority order if configured (lower = earlier, ties broken alphabetically).
+	if (Object.keys(state.segmentOrder).length > 0) {
+		parts.sort((a, b) => {
+			const pa = state.segmentOrder[a.key] ?? 999;
+			const pb = state.segmentOrder[b.key] ?? 999;
+			if (pa !== pb) return pa - pb;
+			return a.key.localeCompare(b.key);
+		});
 	}
 
 	const separator = `  ${theme.fg("dim", SEGMENT_SEPARATOR)}  `;

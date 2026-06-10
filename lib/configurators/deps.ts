@@ -17,8 +17,8 @@ export type ConfiguratorDeps = {
 	setStatusFilter(filter: StatusFilter): void;
 	getSegmentColors(): Record<string, string>;
 	setSegmentColor(name: string, color: string): void;
-	getSegmentOrder(): readonly string[];
-	setSegmentOrder(order: string[]): void;
+	getSegmentOrder(): Record<string, number>;
+	setSegmentOrder(order: Record<string, number>): void;
 	seenStatusKeys: Set<string>;
 	refresh(): void;
 };

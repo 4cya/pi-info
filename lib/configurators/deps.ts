@@ -5,7 +5,7 @@
  * and re-rendering stay in one place.
  */
 
-import type { SegmentConfig } from "../config.js";
+import type { SegmentConfig, StyleConfig } from "../config.js";
 import type { SegmentName } from "../constants.js";
 import type { StatusFilter } from "../status-filter.js";
 
@@ -22,6 +22,15 @@ export type ConfiguratorDeps = {
 	 * key (restoring the default). Persists and re-renders.
 	 */
 	updateSegmentConfig(name: string, patch: Partial<SegmentConfig>): void;
+	getStyle(): StyleConfig;
+	/**
+	 * Merge a patch into the container style. `undefined` values delete the
+	 * key (restoring the default). Persists, remounts if the position
+	 * changed, and re-renders.
+	 */
+	updateStyle(patch: Partial<StyleConfig>): void;
+	/** Replace the whole container style (used by style presets). */
+	setStyle(style: StyleConfig): void;
 	getSeparator(): { char: string; color: string };
 	/** Persists and re-renders. */
 	setSeparator(char: string): void;

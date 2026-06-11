@@ -17,6 +17,7 @@
  *   lib/config.ts          persisted per-segment config + env parsing
  *   lib/template.ts        format template engine
  *   lib/footer.ts          footer line rendering
+ *   lib/style.ts           container styling (position, border, background)
  *   lib/presets.ts         one-step format presets
  *   lib/registry.ts        dynamic segment registry (public registerSegment API)
  *   lib/configurators/     /info TUI configurators
@@ -28,15 +29,21 @@
  *   PI_INFO_CONFIG      override the persisted config path
  */
 
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type {
+	ExtensionAPI,
+	ExtensionContext,
+	ReadonlyFooterDataProvider,
+} from "@earendil-works/pi-coding-agent";
 import { openColorConfigurator } from "../lib/configurators/colors.js";
 import type { ConfiguratorDeps } from "../lib/configurators/deps.js";
 import { openFormatConfigurator } from "../lib/configurators/format.js";
 import { openOrderConfigurator } from "../lib/configurators/order.js";
 import { openSegmentConfigurator } from "../lib/configurators/segments.js";
 import { openSeparatorConfigurator } from "../lib/configurators/separator.js";
+import { openStyleConfigurator } from "../lib/configurators/style.js";
 import {
 	applySegmentPatch,
+	applyStylePatch,
 	parseThresholds,
 	readGlobalConfig,
 	readGlobalSegments,
@@ -44,6 +51,7 @@ import {
 	writeGlobalConfig,
 	type SegmentConfig,
 	type SeparatorConfig,
+	type StyleConfig,
 } from "../lib/config.js";
 import {
 	ALL_SEGMENTS,
@@ -52,7 +60,7 @@ import {
 	STATUS_FILTER_ENTRY_TYPE,
 	type SegmentName,
 } from "../lib/constants.js";
-import { renderFooterLine } from "../lib/footer.js";
+import { renderFooterLines, type FooterRenderState } from "../lib/footer.js";
 import { PRESETS, type Preset } from "../lib/presets.js";
 import { registeredSegments, registerSegment, visibleDynamic } from "../lib/registry.js";
 import {
@@ -71,7 +79,12 @@ export default function (pi: ExtensionAPI) {
 	let statusFilter: StatusFilter = { mode: "all", hidden: new Set() };
 	let segmentConfigs: Record<string, SegmentConfig> = {};
 	let separatorConfig: SeparatorConfig = {};
+	let styleConfig: StyleConfig = {};
 	let visibleSegments: SegmentName[] = DEFAULT_SEGMENTS;
+	let thresholds = parseThresholds();
+	// Set by mountUI on session_start; needed to remount when the position changes.
+	let uiCtx: ExtensionContext | undefined;
+	let footerDataRef: ReadonlyFooterDataProvider | undefined;
 
 	const seenStatusKeys = new Set<string>();
 	const refresh = () => requestRender?.();
@@ -101,11 +114,82 @@ export default function (pi: ExtensionAPI) {
 		const config = readGlobalConfig();
 		segmentConfigs = config.segments ?? {};
 		separatorConfig = config.separator ?? {};
+		styleConfig = config.style ?? {};
 		visibleSegments = readGlobalSegments() ?? DEFAULT_SEGMENTS;
 		registerCustomSegments();
 		syncDynamicVisibility();
 	};
 	loadConfig();
+
+	const renderState = (): FooterRenderState => ({
+		visibleSegments,
+		statusFilter,
+		segmentConfigs,
+		seenStatusKeys,
+		warningThreshold: thresholds.warningThreshold,
+		errorThreshold: thresholds.errorThreshold,
+		thinkingLevel: String(pi.getThinkingLevel()),
+		separator: separatorConfig,
+		style: styleConfig,
+	});
+
+	/**
+	 * Mounts the statusline at the configured position. The footer slot is
+	 * always claimed: in footer mode it renders the line; in widget mode it
+	 * renders nothing — this hides pi's built-in footer (the statusline
+	 * replaces it) and keeps access to extension statuses, which only the
+	 * footer factory receives.
+	 */
+	const mountUI = (ctx: ExtensionContext) => {
+		if (!ctx.hasUI) return;
+		uiCtx = ctx;
+		const position = styleConfig.position ?? "footer";
+
+		ctx.ui.setFooter((tui, theme, footerData) => {
+			footerDataRef = footerData;
+			requestRender = () => tui.requestRender();
+			return {
+				dispose() {
+					requestRender = undefined;
+				},
+				invalidate() {},
+				render(width: number): string[] {
+					if (position !== "footer") return [];
+					return renderFooterLines(
+						ctx,
+						theme,
+						width,
+						renderState(),
+						footerData?.getExtensionStatuses?.() ?? new Map(),
+					);
+				},
+			};
+		});
+
+		if (position === "footer") {
+			ctx.ui.setWidget("pi-info", undefined);
+		} else {
+			ctx.ui.setWidget(
+				"pi-info",
+				(tui, theme) => {
+					requestRender = () => tui.requestRender();
+					return {
+						invalidate() {},
+						render(width: number): string[] {
+							return renderFooterLines(
+								ctx,
+								theme,
+								width,
+								renderState(),
+								footerDataRef?.getExtensionStatuses?.() ?? new Map(),
+							);
+						},
+					};
+				},
+				{ placement: position },
+			);
+		}
+	};
 
 	const persistSegments = () => {
 		writeGlobalConfig({ segments: segmentConfigs });
@@ -164,6 +248,22 @@ export default function (pi: ExtensionAPI) {
 			segmentConfigs = applySegmentPatch(segmentConfigs, name, patch);
 			persistSegments();
 		},
+		getStyle: () => styleConfig,
+		updateStyle: (patch) => {
+			const positionChanged =
+				"position" in patch && (patch.position ?? "footer") !== (styleConfig.position ?? "footer");
+			styleConfig = applyStylePatch(styleConfig, patch);
+			writeGlobalConfig({ style: styleConfig });
+			if (positionChanged && uiCtx) mountUI(uiCtx);
+			refresh();
+		},
+		setStyle: (style) => {
+			const positionChanged = (style.position ?? "footer") !== (styleConfig.position ?? "footer");
+			styleConfig = { ...style };
+			writeGlobalConfig({ style: styleConfig });
+			if (positionChanged && uiCtx) mountUI(uiCtx);
+			refresh();
+		},
 		getSeparator: () => ({
 			char: separatorConfig.char ?? SEGMENT_SEPARATOR,
 			color: separatorConfig.color ?? "dim",
@@ -186,7 +286,7 @@ export default function (pi: ExtensionAPI) {
 		description: "Configure the pi-info footer",
 		getArgumentCompletions(prefix: string) {
 			const word = prefix.trim().split(/\s+/).filter(Boolean).pop() ?? "";
-			const items = ["segments", "color", "order", "separator", "format", "preset"];
+			const items = ["segments", "color", "order", "separator", "format", "style", "preset"];
 			return items
 				.filter((item) => item.startsWith(word))
 				.map((item) => ({ value: item, label: item }));
@@ -214,6 +314,10 @@ export default function (pi: ExtensionAPI) {
 					case "formats":
 						await openFormatConfigurator(ctx, deps);
 						return true;
+					case "style":
+					case "styles":
+						await openStyleConfigurator(ctx, deps);
+						return true;
 					case "preset":
 					case "presets": {
 						const choice = await ctx.ui.select(
@@ -239,6 +343,7 @@ export default function (pi: ExtensionAPI) {
 				"order     — reorder segment display",
 				"separator — change the segment separator",
 				"format    — edit segment format templates",
+				"style     — container style: position, border, background",
 				"preset    — apply a format preset",
 			]);
 			if (!choice) return;
@@ -258,44 +363,15 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_start", async (_event, ctx) => {
 		loadConfig();
 		restoreStatusFilter(ctx);
-
-		if (!ctx.hasUI) return;
-
-		const { warningThreshold, errorThreshold } = parseThresholds();
-
-		ctx.ui.setFooter((tui, theme, footerData) => {
-			requestRender = () => tui.requestRender();
-
-			return {
-				dispose() {
-					requestRender = undefined;
-				},
-				invalidate() {},
-				render(width: number): string[] {
-					return [
-						renderFooterLine(
-							ctx,
-							theme,
-							width,
-							{
-								visibleSegments,
-								statusFilter,
-								segmentConfigs,
-								seenStatusKeys,
-								warningThreshold,
-								errorThreshold,
-								thinkingLevel: String(pi.getThinkingLevel()),
-								separator: separatorConfig,
-							},
-							footerData?.getExtensionStatuses?.() ?? new Map(),
-						),
-					];
-				},
-			};
-		});
+		thresholds = parseThresholds();
+		mountUI(ctx);
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
-		if (ctx.hasUI) ctx.ui.setFooter(undefined);
+		if (ctx.hasUI) {
+			ctx.ui.setFooter(undefined);
+			ctx.ui.setWidget("pi-info", undefined);
+		}
+		uiCtx = undefined;
 	});
 }

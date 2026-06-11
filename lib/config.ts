@@ -5,6 +5,7 @@
  * Schema: one config object per segment, keyed by segment name.
  *   {
  *     "separator": { "char": "❯", "color": "dim" },
+ *     "style": { "position": "footer", "border": "rounded", "padding": 1 },
  *     "segments": {
  *       "model": { "format": " {name}", "color": "accent", "order": 1 },
  *       "io": false,
@@ -23,11 +24,21 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import {
 	ALL_SEGMENTS,
+	BORDER_STYLES,
 	DEFAULT_ERROR_THRESHOLD,
 	DEFAULT_SEGMENTS,
 	DEFAULT_WARNING_THRESHOLD,
 	isSegmentName,
+	STYLE_ALIGNS,
+	STYLE_OVERFLOWS,
+	STYLE_POSITIONS,
+	STYLE_WIDTHS,
+	type BorderStyleName,
 	type SegmentName,
+	type StyleAlign,
+	type StyleOverflow,
+	type StylePosition,
+	type StyleWidth,
 } from "./constants.js";
 import type { SerializedStatusFilter } from "./status-filter.js";
 
@@ -55,9 +66,36 @@ export type SeparatorConfig = {
 	color?: string;
 };
 
+/**
+ * Container-level style for the whole statusline. Every field is optional;
+ * all-defaults renders exactly like versions without this block (footer,
+ * left-aligned, full width, no border/background/margins).
+ */
+export type StyleConfig = {
+	/** Where the line is mounted. Non-footer placements hide pi's built-in footer. */
+	position?: StylePosition;
+	/** full: content position inside the bar; content: bar position in the terminal. */
+	align?: StyleAlign;
+	/** full = span the terminal; content = shrink-wrap the segments. */
+	width?: StyleWidth;
+	/** Overwide content: truncate (default) or wrap onto more lines at segment boundaries. */
+	overflow?: StyleOverflow;
+	/** Spaces between content and the border/background edge. */
+	padding?: number;
+	/** Blank lines above/below the container. */
+	marginTop?: number;
+	marginBottom?: number;
+	/** Background: #RRGGBB or a pi theme bg name (e.g. selectedBg). */
+	background?: string;
+	border?: BorderStyleName;
+	/** Border color (hex or theme color). Default "dim". */
+	borderColor?: string;
+};
+
 export type GlobalConfig = {
 	statusFilter?: SerializedStatusFilter;
 	separator?: SeparatorConfig;
+	style?: StyleConfig;
 	/** Per-segment overrides; `false` hides a segment. */
 	segments?: Record<string, SegmentConfig>;
 };
@@ -118,6 +156,59 @@ export function parseThresholds(): { warningThreshold: number; errorThreshold: n
 	};
 }
 
+function clampInt(value: unknown, min: number, max: number): number | undefined {
+	if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+	return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+function oneOf<T extends string>(value: unknown, valid: readonly T[]): T | undefined {
+	return typeof value === "string" && (valid as readonly string[]).includes(value)
+		? (value as T)
+		: undefined;
+}
+
+/** Drops unknown keys and out-of-range values; never throws. */
+export function sanitizeStyleConfig(value: unknown): StyleConfig {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+	const v = value as Record<string, unknown>;
+	const out: StyleConfig = {};
+	const position = oneOf(v.position, STYLE_POSITIONS);
+	if (position) out.position = position;
+	const align = oneOf(v.align, STYLE_ALIGNS);
+	if (align) out.align = align;
+	const width = oneOf(v.width, STYLE_WIDTHS);
+	if (width) out.width = width;
+	const overflow = oneOf(v.overflow, STYLE_OVERFLOWS);
+	if (overflow) out.overflow = overflow;
+	const padding = clampInt(v.padding, 0, 8);
+	if (padding !== undefined) out.padding = padding;
+	const marginTop = clampInt(v.marginTop, 0, 5);
+	if (marginTop !== undefined) out.marginTop = marginTop;
+	const marginBottom = clampInt(v.marginBottom, 0, 5);
+	if (marginBottom !== undefined) out.marginBottom = marginBottom;
+	if (typeof v.background === "string") out.background = v.background;
+	const border = oneOf(v.border, BORDER_STYLES);
+	if (border) out.border = border;
+	if (typeof v.borderColor === "string") out.borderColor = v.borderColor;
+	return out;
+}
+
+/**
+ * Merge a patch into a style config. `undefined` patch values delete the
+ * key (restoring the default). Pure — returns a new object.
+ */
+export function applyStylePatch(
+	style: StyleConfig,
+	patch: Partial<StyleConfig>,
+): StyleConfig {
+	const next: Record<string, unknown> = { ...style };
+	for (const [key, value] of Object.entries(patch)) {
+		if (value === undefined) delete next[key];
+		else next[key] = value;
+	}
+	return next as StyleConfig;
+}
+
 /** Validates one segment entry; `false` is shorthand for { hidden: true }. */
 function sanitizeSegmentConfig(value: unknown): SegmentConfig | null {
 	if (value === false) return { hidden: true };
@@ -146,6 +237,10 @@ export function readGlobalConfig(): GlobalConfig {
 				char: typeof sep.char === "string" ? sep.char : undefined,
 				color: typeof sep.color === "string" ? sep.color : undefined,
 			};
+		}
+		if (data.style !== undefined) {
+			const style = sanitizeStyleConfig(data.style);
+			if (Object.keys(style).length > 0) config.style = style;
 		}
 		if (data.segments && typeof data.segments === "object" && !Array.isArray(data.segments)) {
 			const segments: Record<string, SegmentConfig> = {};

@@ -11,20 +11,21 @@
  */
 
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth } from "@earendil-works/pi-tui";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import {
 	applyColor,
 	applyStyle,
 	contextColor,
 	thinkingColor,
 } from "./colors.js";
-import type { SegmentConfig, SeparatorConfig } from "./config.js";
+import type { SegmentConfig, SeparatorConfig, StyleConfig } from "./config.js";
 import {
 	SEGMENT_SEPARATOR,
 	type SegmentName,
 } from "./constants.js";
 import { registeredSegments, visibleDynamic } from "./registry.js";
 import { shouldShowStatus, type StatusFilter } from "./status-filter.js";
+import { applyContainerStyle, contentWidthFor } from "./style.js";
 import { renderTemplate, runsText, trimRuns, type StyledRun } from "./template.js";
 import { formatModelName, formatTokens, stripTerminalControls } from "./text.js";
 
@@ -37,6 +38,7 @@ export type FooterRenderState = {
 	errorThreshold: number;
 	thinkingLevel: string;
 	separator?: SeparatorConfig;
+	style?: StyleConfig;
 };
 
 /** A segment ready for the template pipeline. */
@@ -68,13 +70,66 @@ export function formatExtensionStatuses(
 		}));
 }
 
-export function renderFooterLine(
+/**
+ * Greedy line packing for overflow "wrap": segments that fit join the
+ * current line, the rest start new ones. A single overwide segment stays
+ * alone on its line (the container layer truncates it).
+ */
+function packLines(parts: string[], separator: string, maxWidth: number): string[] {
+	const sepWidth = visibleWidth(separator);
+	const lines: string[] = [];
+	let current: string[] = [];
+	let currentWidth = 0;
+	for (const part of parts) {
+		const partWidth = visibleWidth(part);
+		if (current.length > 0 && currentWidth + sepWidth + partWidth > maxWidth) {
+			lines.push(current.join(separator));
+			current = [];
+			currentWidth = 0;
+		}
+		currentWidth += current.length > 0 ? sepWidth + partWidth : partWidth;
+		current.push(part);
+	}
+	if (current.length > 0) lines.push(current.join(separator));
+	return lines.length > 0 ? lines : [""];
+}
+
+/** Full pipeline: segment content line(s) wrapped in the container style. */
+export function renderFooterLines(
 	ctx: ExtensionContext,
 	theme: Theme,
 	width: number,
 	state: FooterRenderState,
 	extensionStatuses: ReadonlyMap<string, string>,
+): string[] {
+	const style = state.style ?? {};
+	const { parts, separator } = renderFooterParts(ctx, theme, state, extensionStatuses);
+	const content =
+		style.overflow === "wrap"
+			? packLines(parts, separator, contentWidthFor(width, style))
+			: parts.join(separator);
+	return applyContainerStyle(content, width, style, theme);
+}
+
+/** Renders the untruncated segment content line (no container styling). */
+export function renderFooterLine(
+	ctx: ExtensionContext,
+	theme: Theme,
+	_width: number,
+	state: FooterRenderState,
+	extensionStatuses: ReadonlyMap<string, string>,
 ): string {
+	const { parts, separator } = renderFooterParts(ctx, theme, state, extensionStatuses);
+	return parts.join(separator);
+}
+
+/** Renders each segment to its colored text, in display order. */
+function renderFooterParts(
+	ctx: ExtensionContext,
+	theme: Theme,
+	state: FooterRenderState,
+	extensionStatuses: ReadonlyMap<string, string>,
+): { parts: string[]; separator: string } {
 	// Template pipeline: format → styled runs → colored text. Returns null
 	// when the rendered text is empty (e.g. all optional groups vanished).
 	const renderSpec = (name: string, spec: SegmentSpec): string | null => {
@@ -193,5 +248,7 @@ export function renderFooterLine(
 	const separator = separatorChar
 		? `  ${applyColor(state.separator?.color ?? "dim", theme, separatorChar)}  `
 		: "  ";
-	return truncateToWidth(parts.map((part) => part.text).join(separator), width);
+	// Truncation happens in the container layer (applyContainerStyle),
+	// which knows the border/padding overhead.
+	return { parts: parts.map((part) => part.text), separator };
 }

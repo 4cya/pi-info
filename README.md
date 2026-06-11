@@ -19,6 +19,7 @@ claude-opus-4.7  ❯  think:med  ❯  2.6% / 1.0M  ❯  $0.412  ❯  ↑12k ↓3
 - **Format templates** — restyle any segment with starship-style templates: `{var}` interpolation, `[text](style)` spans, optional groups. Drop in Nerd Font icons or emoji.
 - **Shell-command segments** — one config entry turns any command's stdout into a segment.
 - **Pluggable segments** — any extension can register its own segment with one function call; pi-info stays a pure display layer.
+- **Container styling** — put the bar in the footer or above/below the input box; add borders, backgrounds, alignment, padding, margins; wrap or truncate when space runs out.
 - **Fully configurable** — toggle, recolor, reorder, and reformat every segment from inside pi; settings persist across sessions.
 
 <p align="center"><img src="assets/basic.png" alt="pi-info statusline in action" width="700" /></p>
@@ -64,7 +65,8 @@ Segments hide automatically when they have nothing to show.
 | `/info order` | Reorder segments |
 | `/info separator` | Change the separator between segments (string + color) |
 | `/info format` | Edit per-segment format templates |
-| `/info preset` | Apply a style preset — formats + separator (`plain` / `minimal` / `bars` / `nerd` / `emoji`) |
+| `/info style` | Container style — position, border, background, alignment, overflow |
+| `/info preset` | Apply a format preset — formats + separator (`plain` / `minimal` / `bars` / `nerd` / `emoji`) |
 
 **Segment visibility:**
 
@@ -81,6 +83,7 @@ Settings persist to `~/.pi/agent/pi-info.json` — one object per segment:
 ```json
 {
   "separator": { "char": "❯", "color": "dim" },
+  "style": { "position": "aboveEditor", "border": "rounded", "padding": 1 },
   "segments": {
     "model":   { "format": " {name}", "color": "accent", "order": 1 },
     "context": { "format": "[{percent}%](auto bold) · {window}" },
@@ -101,6 +104,34 @@ Per-segment keys (all optional):
 | `command` | Shell command whose stdout becomes `{output}` — defines a custom segment |
 | `interval` | Cache command output for N seconds (default 60) |
 | `label` | Display name in `/info` for command segments |
+
+### Container style
+
+The whole bar is styled by the optional top-level `style` block — where it lives, what wraps it, and how it behaves when space runs out. Everything defaults to the classic footer look.
+
+| Key | Values | Meaning |
+| --- | --- | --- |
+| `position` | `footer` (default) / `aboveEditor` / `belowEditor` | Where the bar is mounted; non-footer placements replace pi's built-in footer |
+| `align` | `left` (default) / `center` / `right` | Full width: aligns the content; content width: aligns the bar |
+| `width` | `full` (default) / `content` | Span the terminal or shrink-wrap the segments |
+| `overflow` | `truncate` (default) / `wrap` | Overwide content: cut it off, or wrap onto more lines at segment boundaries |
+| `border` | `none` (default) / `single` / `rounded` / `double` / `heavy` / `ascii` / `top` | Box around the bar; `top` is a single rule above it |
+| `borderColor` | theme name or `#RRGGBB` | Border color (default `dim`) |
+| `background` | theme bg name or `#RRGGBB` | Bar background, e.g. `selectedBg` or `#303446` |
+| `padding` | `0`–`8` | Spaces between content and the border/background edge |
+| `marginTop` / `marginBottom` | `0`–`5` | Blank lines around the bar |
+
+`/info style` includes one-step presets: `plain`, `boxed` (rounded border), `island` (centered floating bar), `top-line`, `above-input`, `below-input`.
+
+```json
+"style": { "align": "center", "width": "content", "border": "rounded", "padding": 1 }
+```
+
+```text
+        ╭─────────────────────────────────────────╮
+        │ claude-opus-4.7 ❯ think:med ❯ 2.6% / 1M │
+        ╰─────────────────────────────────────────╯
+```
 
 ### Format templates
 

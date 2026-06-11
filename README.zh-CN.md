@@ -19,6 +19,7 @@ claude-opus-4.7  ❯  think:med  ❯  2.6% / 1.0M  ❯  $0.412  ❯  ↑12k ↓3
 - **格式模板** —— 用 starship 风格模板重塑任意段：`{var}` 插值、`[text](style)` 局部样式、可选组。Nerd Font 图标和 emoji 直接往里贴。
 - **Shell 命令 segment** —— 一条配置就把任意命令的 stdout 变成一个段。
 - **可插拔 segment** —— 任何扩展一个函数调用即可注册自己的段；pi-info 保持纯展示层。
+- **容器样式** —— 状态栏放 footer 或输入框上方/下方；加边框、背景、对齐、内外边距；放不下时可截断或换行。
 - **完全可配置** —— 在 pi 内开关、改色、排序、改格式，设置跨会话持久化。
 
 <p align="center"><img src="assets/basic.png" alt="pi-info 状态栏效果" width="700" /></p>
@@ -64,7 +65,8 @@ pi 已在运行？先 `/reload`，再打开配置器：
 | `/info order` | 调整段顺序 |
 | `/info separator` | 自定义段之间的分隔符（字符 + 颜色） |
 | `/info format` | 编辑每段的格式模板 |
-| `/info preset` | 一键套用风格预设——格式 + 分隔符（`plain` / `minimal` / `bars` / `nerd` / `emoji`） |
+| `/info style` | 容器样式——位置、边框、背景、对齐、溢出 |
+| `/info preset` | 一键套用格式预设——格式 + 分隔符（`plain` / `minimal` / `bars` / `nerd` / `emoji`） |
 
 **段可见性：**
 
@@ -81,6 +83,7 @@ pi 已在运行？先 `/reload`，再打开配置器：
 ```json
 {
   "separator": { "char": "❯", "color": "dim" },
+  "style": { "position": "aboveEditor", "border": "rounded", "padding": 1 },
   "segments": {
     "model":   { "format": " {name}", "color": "accent", "order": 1 },
     "context": { "format": "[{percent}%](auto bold) · {window}" },
@@ -101,6 +104,34 @@ pi 已在运行？先 `/reload`，再打开配置器：
 | `command` | shell 命令，stdout 即 `{output}` —— 定义一个自定义段 |
 | `interval` | 命令输出缓存 N 秒（默认 60） |
 | `label` | 命令段在 `/info` 里的显示名 |
+
+### 容器样式
+
+整条状态栏由可选的顶层 `style` 块控制——放在哪、被什么包裹、放不下时怎么办。全部省略时就是经典 footer 外观。
+
+| 键 | 取值 | 含义 |
+| --- | --- | --- |
+| `position` | `footer`（默认）/ `aboveEditor` / `belowEditor` | 挂载位置；非 footer 位置会替代 pi 内置 footer |
+| `align` | `left`（默认）/ `center` / `right` | 全宽时对齐内容；紧贴内容时对齐整条栏 |
+| `width` | `full`（默认）/ `content` | 铺满终端，或紧贴内容宽度 |
+| `overflow` | `truncate`（默认）/ `wrap` | 内容超宽：截断，或按 segment 边界换行 |
+| `border` | `none`（默认）/ `single` / `rounded` / `double` / `heavy` / `ascii` / `top` | 边框；`top` 只在上方画一条线 |
+| `borderColor` | 主题色名或 `#RRGGBB` | 边框颜色（默认 `dim`） |
+| `background` | 主题背景名或 `#RRGGBB` | 背景色，如 `selectedBg` 或 `#303446` |
+| `padding` | `0`–`8` | 内容与边框/背景边缘之间的空格数 |
+| `marginTop` / `marginBottom` | `0`–`5` | 栏上下的空行数 |
+
+`/info style` 内置一键预设：`plain`、`boxed`（圆角边框）、`island`（居中悬浮岛）、`top-line`、`above-input`、`below-input`。
+
+```json
+"style": { "align": "center", "width": "content", "border": "rounded", "padding": 1 }
+```
+
+```text
+        ╭─────────────────────────────────────────╮
+        │ claude-opus-4.7 ❯ think:med ❯ 2.6% / 1M │
+        ╰─────────────────────────────────────────╯
+```
 
 ### 格式模板
 

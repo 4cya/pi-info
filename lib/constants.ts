@@ -20,6 +20,24 @@ export const SEGMENT_LABELS: Record<SegmentName, string> = {
 	extensions: "Extension statuses",
 };
 
+/** Where the statusline is mounted. Widget placements map to pi's setWidget. */
+export const STYLE_POSITIONS = ["footer", "aboveEditor", "belowEditor"] as const;
+export type StylePosition = (typeof STYLE_POSITIONS)[number];
+
+export const STYLE_ALIGNS = ["left", "center", "right"] as const;
+export type StyleAlign = (typeof STYLE_ALIGNS)[number];
+
+export const STYLE_WIDTHS = ["full", "content"] as const;
+export type StyleWidth = (typeof STYLE_WIDTHS)[number];
+
+/** What happens when the content is wider than the terminal. */
+export const STYLE_OVERFLOWS = ["truncate", "wrap"] as const;
+export type StyleOverflow = (typeof STYLE_OVERFLOWS)[number];
+
+/** "top" draws a single rule above the line instead of a full box. */
+export const BORDER_STYLES = ["none", "single", "rounded", "double", "heavy", "ascii", "top"] as const;
+export type BorderStyleName = (typeof BORDER_STYLES)[number];
+
 export const DEFAULT_WARNING_THRESHOLD = 70;
 export const DEFAULT_ERROR_THRESHOLD = 90;
 

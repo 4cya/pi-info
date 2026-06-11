@@ -59,7 +59,9 @@ import {
 	SEGMENT_SEPARATOR,
 	STATUS_FILTER_ENTRY_TYPE,
 	type SegmentName,
+	type StylePosition,
 } from "../lib/constants.js";
+import { animatedUsed, beginEffectTracking } from "../lib/effects.js";
 import { renderFooterLines, type FooterRenderState } from "../lib/footer.js";
 import { PRESETS, type Preset } from "../lib/presets.js";
 import { registeredSegments, registerSegment, visibleDynamic } from "../lib/registry.js";
@@ -70,8 +72,11 @@ import {
 } from "../lib/status-filter.js";
 import { createCustomSegment } from "../segments/custom.js";
 
-// Public API for other extensions: register custom footer segments.
+// Public API for other extensions: register custom footer segments and
+// text effects.
 export { registerSegment, unregisterSegment } from "../lib/registry.js";
+export { registerEffect, unregisterEffect } from "../lib/effects.js";
+export type { TextEffect } from "../lib/effects.js";
 export type { SegmentProvider } from "../segments/types.js";
 
 export default function (pi: ExtensionAPI) {
@@ -85,6 +90,7 @@ export default function (pi: ExtensionAPI) {
 	// Set by mountUI on session_start; needed to remount when the position changes.
 	let uiCtx: ExtensionContext | undefined;
 	let footerDataRef: ReadonlyFooterDataProvider | undefined;
+	let mountedPositions = new Set<StylePosition>();
 
 	const seenStatusKeys = new Set<string>();
 	const refresh = () => requestRender?.();
@@ -133,17 +139,67 @@ export default function (pi: ExtensionAPI) {
 		style: styleConfig,
 	});
 
+	// Animated effects need periodic re-renders. Each bar reports whether
+	// its last render used one; the ticker runs only while any did, so
+	// static configs cost nothing.
+	let ticker: ReturnType<typeof setInterval> | undefined;
+	let tickerInterval = 0;
+	const animatedByBar = new Map<string, number | null>();
+	const stopTicker = () => {
+		if (ticker) clearInterval(ticker);
+		ticker = undefined;
+		tickerInterval = 0;
+	};
+	const syncTicker = () => {
+		const intervals = [...animatedByBar.values()].filter((ms): ms is number => ms !== null);
+		if (intervals.length === 0) {
+			stopTicker();
+			return;
+		}
+		const interval = Math.min(...intervals);
+		if (ticker && tickerInterval === interval) return;
+		stopTicker();
+		tickerInterval = interval;
+		ticker = setInterval(() => requestRender?.(), tickerInterval);
+	};
+
+	/** Render + ticker bookkeeping; shared by all bar mounts. */
+	const renderLines = (
+		ctx: ExtensionContext,
+		theme: Parameters<typeof renderFooterLines>[1],
+		width: number,
+		statuses: ReadonlyMap<string, string>,
+		position: StylePosition,
+	): string[] => {
+		beginEffectTracking();
+		const lines = renderFooterLines(ctx, theme, width, renderState(), statuses, position);
+		animatedByBar.set(position, animatedUsed()?.intervalMs ?? null);
+		syncTicker();
+		return lines;
+	};
+
+	/** Bars referenced by the global position or any per-segment override. */
+	const positionsInUse = (): Set<StylePosition> => {
+		const positions = new Set<StylePosition>([styleConfig.position ?? "footer"]);
+		for (const cfg of Object.values(segmentConfigs)) {
+			if (cfg.position && !cfg.hidden) positions.add(cfg.position);
+		}
+		return positions;
+	};
+
 	/**
-	 * Mounts the statusline at the configured position. The footer slot is
-	 * always claimed: in footer mode it renders the line; in widget mode it
-	 * renders nothing — this hides pi's built-in footer (the statusline
-	 * replaces it) and keeps access to extension statuses, which only the
-	 * footer factory receives.
+	 * Mounts one bar per position in use (global style.position plus any
+	 * per-segment overrides). The footer slot is always claimed: it either
+	 * renders the footer bar or renders nothing — hiding pi's built-in
+	 * footer (the statusline replaces it) while keeping access to extension
+	 * statuses, which only the footer factory receives.
 	 */
 	const mountUI = (ctx: ExtensionContext) => {
 		if (!ctx.hasUI) return;
 		uiCtx = ctx;
-		const position = styleConfig.position ?? "footer";
+		const positions = positionsInUse();
+		mountedPositions = positions;
+		animatedByBar.clear();
 
 		ctx.ui.setFooter((tui, theme, footerData) => {
 			footerDataRef = footerData;
@@ -154,39 +210,42 @@ export default function (pi: ExtensionAPI) {
 				},
 				invalidate() {},
 				render(width: number): string[] {
-					if (position !== "footer") return [];
-					return renderFooterLines(
+					if (!positions.has("footer")) return [];
+					return renderLines(
 						ctx,
 						theme,
 						width,
-						renderState(),
 						footerData?.getExtensionStatuses?.() ?? new Map(),
+						"footer",
 					);
 				},
 			};
 		});
 
-		if (position === "footer") {
-			ctx.ui.setWidget("pi-info", undefined);
-		} else {
+		for (const placement of ["aboveEditor", "belowEditor"] as const) {
+			const key = `pi-info:${placement}`;
+			if (!positions.has(placement)) {
+				ctx.ui.setWidget(key, undefined);
+				continue;
+			}
 			ctx.ui.setWidget(
-				"pi-info",
+				key,
 				(tui, theme) => {
 					requestRender = () => tui.requestRender();
 					return {
 						invalidate() {},
 						render(width: number): string[] {
-							return renderFooterLines(
+							return renderLines(
 								ctx,
 								theme,
 								width,
-								renderState(),
 								footerDataRef?.getExtensionStatuses?.() ?? new Map(),
+								placement,
 							);
 						},
 					};
 				},
-				{ placement: position },
+				{ placement },
 			);
 		}
 	};
@@ -194,6 +253,14 @@ export default function (pi: ExtensionAPI) {
 	const persistSegments = () => {
 		writeGlobalConfig({ segments: segmentConfigs });
 		syncDynamicVisibility();
+		// Showing/hiding/moving segments can change which bars exist.
+		if (uiCtx) {
+			const needed = positionsInUse();
+			const changed =
+				needed.size !== mountedPositions.size ||
+				[...needed].some((p) => !mountedPositions.has(p));
+			if (changed) mountUI(uiCtx);
+		}
 		refresh();
 	};
 
@@ -213,11 +280,18 @@ export default function (pi: ExtensionAPI) {
 		const names = new Set([
 			...Object.keys(segmentConfigs),
 			...Object.keys(preset.formats),
+			...Object.keys(preset.colors ?? {}),
 		]);
 		for (const name of names) {
-			segmentConfigs = applySegmentPatch(segmentConfigs, name, {
+			const colorEntry = preset.colors?.[name];
+			// bg always follows the preset (cleared when not listed); color is
+			// only touched for segments the preset explicitly colors.
+			const patch: Partial<SegmentConfig> = {
 				format: preset.formats[name],
-			});
+				bg: colorEntry?.bg,
+			};
+			if (colorEntry) patch.color = colorEntry.color;
+			segmentConfigs = applySegmentPatch(segmentConfigs, name, patch);
 		}
 		if (preset.separator) {
 			separatorConfig = preset.separator;
@@ -267,6 +341,7 @@ export default function (pi: ExtensionAPI) {
 		getSeparator: () => ({
 			char: separatorConfig.char ?? SEGMENT_SEPARATOR,
 			color: separatorConfig.color ?? "dim",
+			mode: separatorConfig.mode ?? "char",
 		}),
 		setSeparator: (char) => {
 			separatorConfig = { ...separatorConfig, char };
@@ -275,6 +350,11 @@ export default function (pi: ExtensionAPI) {
 		},
 		setSeparatorColor: (color) => {
 			separatorConfig = { ...separatorConfig, color };
+			writeGlobalConfig({ separator: separatorConfig });
+			refresh();
+		},
+		setSeparatorMode: (mode) => {
+			separatorConfig = { ...separatorConfig, mode: mode === "char" ? undefined : mode };
 			writeGlobalConfig({ separator: separatorConfig });
 			refresh();
 		},
@@ -368,9 +448,11 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
+		stopTicker();
 		if (ctx.hasUI) {
 			ctx.ui.setFooter(undefined);
-			ctx.ui.setWidget("pi-info", undefined);
+			ctx.ui.setWidget("pi-info:aboveEditor", undefined);
+			ctx.ui.setWidget("pi-info:belowEditor", undefined);
 		}
 		uiCtx = undefined;
 	});

@@ -17,6 +17,16 @@ export const PRESET_COLORS = [
 	"#fab387", "#f9e2af", "#cba6f7",
 ];
 
+/** Effect specs offered alongside plain colors (see lib/effects.ts). */
+export const PRESET_EFFECTS = [
+	"rainbow",
+	"rainbow-flow",
+	"gradient:#89b4fa..#cba6f7",
+	"gradient-flow:#89b4fa..#cba6f7..#f38ba8",
+	"pulse:#89b4fa",
+	"wave:#89b4fa",
+];
+
 export async function openColorConfigurator(
 	ctx: ExtensionContext,
 	deps: ConfiguratorDeps,
@@ -36,7 +46,8 @@ export async function openColorConfigurator(
 		const hasOverride = configs[name]?.color !== undefined;
 		const values = [
 			...PRESET_COLORS,
-			...(PRESET_COLORS.includes(current) ? [] : [current]),
+			...PRESET_EFFECTS,
+			...(PRESET_COLORS.includes(current) || PRESET_EFFECTS.includes(current) ? [] : [current]),
 		];
 		return {
 			id: `color:${name}`,
@@ -49,7 +60,10 @@ export async function openColorConfigurator(
 				input.setValue(currentValue);
 				input.onSubmit = (value: string) => {
 					if (!isValidColor(value)) {
-						ctx.ui.notify(`Invalid: "${value}". Use #RRGGBB or theme name.`, "warning");
+						ctx.ui.notify(
+							`Invalid: "${value}". Use #RRGGBB, theme name, or effect (rainbow, gradient:#a..#b, …).`,
+							"warning",
+						);
 						return;
 					}
 					done(value);

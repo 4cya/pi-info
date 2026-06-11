@@ -4,6 +4,7 @@
  */
 
 import type { ThemeColor } from "@earendil-works/pi-coding-agent";
+import { applyEffect, isEffectSpec, resolveEffect } from "./effects.js";
 
 /** Known pi theme color names (lowercase). */
 export const VALID_THEME_COLORS = new Set([
@@ -25,15 +26,20 @@ export function isValidHex(s: string): boolean {
 }
 
 export function isValidColor(s: string): boolean {
-	return isValidHex(s) || VALID_THEME_COLORS.has(s.toLowerCase());
+	return isValidHex(s) || VALID_THEME_COLORS.has(s.toLowerCase()) || isEffectSpec(s);
 }
 
-/** Applies a ThemeColor or hex (#RRGGBB) to text using ANSI escapes. */
+/**
+ * Applies a ThemeColor, hex (#RRGGBB), or text effect (rainbow,
+ * gradient:#a..#b, …) to text using ANSI escapes.
+ */
 export function applyColor(
 	color: string,
 	theme: { fg: (c: ThemeColor, t: string) => string },
 	text: string,
 ): string {
+	const effect = resolveEffect(color);
+	if (effect) return applyEffect(effect, text);
 	if (color.startsWith("#")) {
 		const hex = color.replace(/^#/, "");
 		const r = parseInt(hex.slice(0, 2), 16);
@@ -43,6 +49,53 @@ export function applyColor(
 	}
 	// Non-hex colors are validated against VALID_THEME_COLORS upstream.
 	return theme.fg(color as ThemeColor, text);
+}
+
+/** pi theme background names usable wherever a bg color is accepted. */
+export const THEME_BACKGROUNDS = [
+	"selectedBg", "userMessageBg", "customMessageBg",
+	"toolPendingBg", "toolSuccessBg", "toolErrorBg",
+] as const;
+
+export function isValidBackground(s: string): boolean {
+	return isValidHex(s) || (THEME_BACKGROUNDS as readonly string[]).includes(s);
+}
+
+// `never` keeps this assignable from Theme, whose bg() takes the narrower ThemeBg.
+type ThemeWithBg = { bg: (c: never, t: string) => string };
+
+/**
+ * Resolves a bg color (hex or theme bg name) to its on/off escape pair.
+ * Returns null for invalid colors.
+ */
+export function bgEscapePair(
+	bg: string,
+	theme: ThemeWithBg,
+): { on: string; off: string } | null {
+	if (isValidHex(bg)) {
+		const r = parseInt(bg.slice(1, 3), 16);
+		const g = parseInt(bg.slice(3, 5), 16);
+		const b = parseInt(bg.slice(5, 7), 16);
+		return { on: `\x1b[48;2;${r};${g};${b}m`, off: "\x1b[49m" };
+	}
+	if (!(THEME_BACKGROUNDS as readonly string[]).includes(bg)) return null;
+	// Extract the theme's escape pair without relying on its internals.
+	const marker = " ";
+	const wrapped = theme.bg(bg as never, marker);
+	const split = wrapped.indexOf(marker);
+	if (split === -1) return null;
+	return { on: wrapped.slice(0, split), off: wrapped.slice(split + marker.length) };
+}
+
+/**
+ * Converts a background escape to the equivalent foreground escape
+ * (48;… → 38;…, 40-47 → 30-37, 100-107 → 90-97). Used to draw powerline
+ * transition arrows in the previous segment's background color.
+ */
+export function bgEscapeToFg(on: string): string {
+	return on
+		.replaceAll("[48;", "[38;")
+		.replace(/\x1b\[(4[0-7]|10[0-7])m/g, (_, n) => `\x1b[${Number(n) - 10}m`);
 }
 
 const STYLE_MODIFIERS = new Set(["bold", "italic", "underline"]);

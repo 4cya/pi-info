@@ -20,6 +20,7 @@ claude-opus-4.7  ❯  think:med  ❯  2.6% / 1.0M  ❯  $0.412  ❯  ↑12k ↓3
 - **Shell-command segments** — one config entry turns any command's stdout into a segment.
 - **Pluggable segments** — any extension can register its own segment with one function call; pi-info stays a pure display layer.
 - **Container styling** — put the bar in the footer or above/below the input box; add borders, backgrounds, alignment, padding, margins; wrap or truncate when space runs out.
+- **Text effects** — rainbow, gradients, pulse, wave; static or animated, usable anywhere a color is. Extensions can register their own effects.
 - **Fully configurable** — toggle, recolor, reorder, and reformat every segment from inside pi; settings persist across sessions.
 
 <p align="center"><img src="assets/basic.png" alt="pi-info statusline in action" width="700" /></p>
@@ -60,13 +61,13 @@ Segments hide automatically when they have nothing to show.
 
 | Subcommand | What it does |
 | --- | --- |
-| `/info segments` | Show/hide any segment, including extension statuses |
+| `/info segments` | Per segment: show/hide and which bar it lives in (`above` / `below` / `footer`) |
 | `/info color` | Per-segment colors — theme names or `#RRGGBB` |
 | `/info order` | Reorder segments |
 | `/info separator` | Change the separator between segments (string + color) |
 | `/info format` | Edit per-segment format templates |
 | `/info style` | Container style — position, border, background, alignment, overflow |
-| `/info preset` | Apply a format preset — formats + separator (`plain` / `minimal` / `bars` / `nerd` / `emoji`) |
+| `/info preset` | Apply a format preset — formats + separator (`plain` / `minimal` / `bars` / `nerd` / `powerline` / `emoji`) |
 
 **Segment visibility:**
 
@@ -99,11 +100,29 @@ Per-segment keys (all optional):
 | --- | --- |
 | `format` | Template string; omit for the segment's default |
 | `color` | Base color for untemplated text — theme name or `#RRGGBB` |
+| `bg` | Segment background block — `#RRGGBB` or theme bg name (powerline-style) |
 | `order` | Priority, lower = earlier (default 999) |
+| `position` | Pin this segment to a bar (`footer` / `aboveEditor` / `belowEditor`); omit to follow the global `style.position` |
 | `hidden` | Hide the segment; `"name": false` is shorthand |
 | `command` | Shell command whose stdout becomes `{output}` — defines a custom segment |
 | `interval` | Cache command output for N seconds (default 60) |
 | `label` | Display name in `/info` for command segments |
+
+### Powerline look
+
+`/info preset` → `powerline` turns every segment into a colored block joined by arrow transitions (needs a patched font). Under the hood it's two ingredients you can also mix by hand: a `bg` per segment, and the separator switched to powerline mode:
+
+```json
+{
+  "separator": { "char": "", "mode": "powerline" },
+  "segments": {
+    "model":   { "bg": "#8aadf4", "color": "#1e2030" },
+    "context": { "bg": "#494d64" }
+  }
+}
+```
+
+In powerline mode the separator `char` is drawn with its foreground taken from the previous block's `bg` and its background from the next block's — the classic seamless transition. Segments without a `bg` render as plain text.
 
 ### Container style
 
@@ -133,6 +152,23 @@ The whole bar is styled by the optional top-level `style` block — where it liv
         ╰─────────────────────────────────────────╯
 ```
 
+**Splitting into multiple bars:** give any segment its own `position` (via `/info segments` or the config) and the statusline splits — segments without one follow the global `style.position`. Bars share the container style and vanish when empty.
+
+```json
+"segments": {
+  "model":   { "position": "aboveEditor" },
+  "context": { "position": "aboveEditor" }
+}
+```
+
+```text
+claude-opus-4.7  ❯  2.6% / 1.0M     ← above the input box
+──────────────────────────────────
+hello world█
+──────────────────────────────────
+$0.412  ❯  ↑12k ↓3.4k               ← footer (everything else)
+```
+
 ### Format templates
 
 ```text
@@ -152,6 +188,26 @@ Any Unicode works: Nerd Font glyphs, emoji, powerline characters.
 "branch":  "[](#f34f29) {branch}",
 "io":      "(⬆{input}  )(⬇{output})"
 ```
+
+### Text effects
+
+Anywhere a color is accepted — segment `color`, `[text](style)` spans, `borderColor`, separator color — an effect spec works too:
+
+| Effect | Look |
+| --- | --- |
+| `rainbow` | hue sweep across the text |
+| `rainbow-flow` | rainbow drifting over time *(animated)* |
+| `gradient:#a..#b[..#c…]` | multi-stop gradient across the text |
+| `gradient-flow:#a..#b[..…]` | gradient drifting over time *(animated)* |
+| `pulse:#RRGGBB` | whole text breathing in brightness *(animated)* |
+| `wave:#RRGGBB` | brightness wave rolling through the text *(animated)* |
+
+```json
+"model":   { "color": "rainbow-flow" },
+"context": { "format": "[{percent}%](gradient:#a6e3a1..#f38ba8) / {window}" }
+```
+
+Animated effects drive a re-render ticker that only runs while one is actually visible — static configs cost nothing. Effects are an open registry, same as segments: any extension can add its own (see Extending below).
 
 ### Environment variables
 
@@ -183,6 +239,38 @@ registerSegment({
 
 Segments that only implement `render()` still work — their output is exposed to templates as `{output}`. Registered segments automatically appear in `/info segments`, `color`, `order`, and `format`, and their settings persist. Extensions can also surface lightweight one-off badges through pi's `ctx.ui.setStatus()`, which show up in the `extensions` segment.
 
+Text effects use the same open-registry pattern:
+
+```ts
+import { registerEffect } from "@sentixx/pi-info/extensions/statusline.js";
+
+registerEffect("flag", {
+	// Hex color for grapheme i of n at time t (seconds).
+	colorAt: (i, n) => ["#ff0000", "#ffffff", "#00aa00"][Math.floor((i / n) * 3)],
+	// intervalMs: 120,  // set for animated effects
+});
+// users can now write "color": "flag" or [text](flag)
+```
+
+## Scope: what pi-info does and doesn't do
+
+pi-info is a **pure display layer** — a terminal sink for information. The boundary, explicitly:
+
+**It does:**
+
+1. **Statusline appearance** — container, layout, colors, effects: everything about *how* things look.
+2. **Information display** — read-only presentation of whatever it's given.
+3. **Receive, never fetch** — data arrives through three one-way channels: pi's own runtime state (model, context, …), the `registerSegment` / `registerEffect` APIs, and `command` segments (your script's stdout).
+
+**It deliberately doesn't:**
+
+1. **Generate information** — no computing, aggregating, or deriving new data. Everything shown must come from a source as-is (display formatting like `12000 → 12k` is the only transform).
+2. **Store information** — no history, no data caches, nothing written to disk except your display config (the short-lived in-memory cache of `command` output is render plumbing, not storage).
+3. **Couple to other plugins** — the only contact surface is the one-way registry API. pi-info never imports, queries, or depends on another extension's internals; if a registrant disappears, pi-info keeps working.
+4. **Output information** — it is the end of the pipe. No query API, no events, no state for others to read.
+
+If a feature request needs pi-info to produce, persist, or publish data, the answer is to do that in your own extension or script and *hand the result to pi-info* to display.
+
 ## Architecture
 
 ```text
@@ -194,6 +282,8 @@ lib/
   colors.ts / text.ts      color + text helpers
   presets.ts               one-step format presets
   registry.ts              dynamic segment registry (registerSegment API)
+  effects.ts               text effect registry (rainbow, gradients, registerEffect API)
+  style.ts                 container styling (position, border, background)
   footer.ts                footer line renderer
   status-filter.ts         extension-status filtering
   configurators/           /info TUI configurators

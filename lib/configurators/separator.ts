@@ -18,7 +18,7 @@ export async function openSeparatorConfigurator(
 	ctx: ExtensionContext,
 	deps: ConfiguratorDeps,
 ): Promise<void> {
-	const { char, color } = deps.getSeparator();
+	const { char, color, mode } = deps.getSeparator();
 
 	const inlineInput = (
 		currentValue: string,
@@ -40,6 +40,13 @@ export async function openSeparatorConfigurator(
 	};
 
 	const items: SettingItem[] = [
+		{
+			id: "sep:mode",
+			label: "Mode",
+			description: "char: plain separator; powerline: arrow transition between segment bg blocks",
+			currentValue: mode,
+			values: ["char", "powerline"],
+		},
 		{
 			id: "sep:char",
 			label: "Separator",
@@ -85,6 +92,7 @@ export async function openSeparatorConfigurator(
 		subtitle: "Space cycles presets · Enter opens inline input · Esc closes",
 		items,
 		onChange: (id, newValue) => {
+			if (id === "sep:mode") deps.setSeparatorMode(newValue as "char" | "powerline");
 			if (id === "sep:char") deps.setSeparator(stripTerminalControls(newValue));
 			if (id === "sep:color") deps.setSeparatorColor(newValue);
 		},

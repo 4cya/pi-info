@@ -15,13 +15,17 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 import {
 	applyColor,
 	applyStyle,
+	bgEscapePair,
+	bgEscapeToFg,
 	contextColor,
+	isValidBackground,
 	thinkingColor,
 } from "./colors.js";
 import type { SegmentConfig, SeparatorConfig, StyleConfig } from "./config.js";
 import {
 	SEGMENT_SEPARATOR,
 	type SegmentName,
+	type StylePosition,
 } from "./constants.js";
 import { registeredSegments, visibleDynamic } from "./registry.js";
 import { shouldShowStatus, type StatusFilter } from "./status-filter.js";
@@ -94,16 +98,25 @@ function packLines(parts: string[], separator: string, maxWidth: number): string
 	return lines.length > 0 ? lines : [""];
 }
 
-/** Full pipeline: segment content line(s) wrapped in the container style. */
+/**
+ * Full pipeline: segment content line(s) wrapped in the container style.
+ *
+ * `position` renders only the segments assigned to that bar (a segment's
+ * `position` config, defaulting to the global style.position) — this is
+ * how the statusline splits into multiple bars. Omit it to render all
+ * segments. Non-footer bars vanish entirely when they have no content.
+ */
 export function renderFooterLines(
 	ctx: ExtensionContext,
 	theme: Theme,
 	width: number,
 	state: FooterRenderState,
 	extensionStatuses: ReadonlyMap<string, string>,
+	position?: StylePosition,
 ): string[] {
 	const style = state.style ?? {};
-	const { parts, separator } = renderFooterParts(ctx, theme, state, extensionStatuses);
+	const { parts, separator } = renderFooterParts(ctx, theme, state, extensionStatuses, position);
+	if (parts.length === 0 && position && position !== "footer") return [];
 	const content =
 		style.overflow === "wrap"
 			? packLines(parts, separator, contentWidthFor(width, style))
@@ -129,7 +142,12 @@ function renderFooterParts(
 	theme: Theme,
 	state: FooterRenderState,
 	extensionStatuses: ReadonlyMap<string, string>,
+	position?: StylePosition,
 ): { parts: string[]; separator: string } {
+	// A segment belongs to the bar its config names, else the global one.
+	const basePosition = state.style?.position ?? "footer";
+	const inBar = (key: string) =>
+		!position || (state.segmentConfigs[key]?.position ?? basePosition) === position;
 	// Template pipeline: format → styled runs → colored text. Returns null
 	// when the rendered text is empty (e.g. all optional groups vanished).
 	const renderSpec = (name: string, spec: SegmentSpec): string | null => {
@@ -185,6 +203,7 @@ function renderFooterParts(
 	};
 
 	for (const segment of state.visibleSegments) {
+		if (!inBar(segment)) continue;
 		if (segment === "extensions") {
 			// Each status renders through the template individually; the
 			// separators between statuses stay dim.
@@ -216,7 +235,7 @@ function renderFooterParts(
 
 	// Registered (dynamic) segments that are visible.
 	for (const [name, provider] of registeredSegments) {
-		if (!visibleDynamic.has(name)) continue;
+		if (!visibleDynamic.has(name) || !inBar(name)) continue;
 		try {
 			let vars: Record<string, string> | null = null;
 			let defaultFormat = provider.defaultFormat ?? "{output}";
@@ -242,6 +261,32 @@ function renderFooterParts(
 		if (pa !== pb) return pa - pb;
 		return 0; // keep registration order for ties
 	});
+
+	// Powerline mode: each segment becomes a colored block followed by a
+	// transition arrow (fg = this block's bg, bg = the next block's bg).
+	// Blocks are self-contained so wrap packing keeps working; the
+	// separator collapses to "".
+	if (state.separator?.mode === "powerline") {
+		const arrowChar = state.separator?.char || "\ue0b0";
+		const bgOf = (key: string) => {
+			const bg = state.segmentConfigs[key]?.bg;
+			return bg && isValidBackground(bg) ? bgEscapePair(bg, theme) : null;
+		};
+		const texts = parts.map((part, i) => {
+			const cur = bgOf(part.key);
+			const next = i + 1 < parts.length ? bgOf(parts[i + 1].key) : null;
+			if (!cur) {
+				// Plain segment: no block, just a space before the next one.
+				return i + 1 < parts.length ? `${part.text} ` : part.text;
+			}
+			const body = ` ${part.text} `;
+			const block = cur.on + body.replaceAll("\x1b[0m", `\x1b[0m${cur.on}`) + cur.off;
+			const arrow =
+				(next?.on ?? "") + bgEscapeToFg(cur.on) + arrowChar + "\x1b[39m" + (next?.off ?? "");
+			return block + arrow;
+		});
+		return { parts: texts, separator: "" };
+	}
 
 	const separatorChar = state.separator?.char ?? SEGMENT_SEPARATOR;
 	// Empty separator collapses to plain spacing between segments.

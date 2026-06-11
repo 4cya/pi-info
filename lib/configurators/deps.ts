@@ -31,11 +31,13 @@ export type ConfiguratorDeps = {
 	updateStyle(patch: Partial<StyleConfig>): void;
 	/** Replace the whole container style (used by style presets). */
 	setStyle(style: StyleConfig): void;
-	getSeparator(): { char: string; color: string };
+	getSeparator(): { char: string; color: string; mode: "char" | "powerline" };
 	/** Persists and re-renders. */
 	setSeparator(char: string): void;
 	/** Persists and re-renders. */
 	setSeparatorColor(color: string): void;
+	/** Persists and re-renders. */
+	setSeparatorMode(mode: "char" | "powerline"): void;
 	seenStatusKeys: Set<string>;
 	refresh(): void;
 };

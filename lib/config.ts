@@ -49,8 +49,15 @@ export type SegmentConfig = {
 	format?: string;
 	/** Base color (hex or theme name) for untemplated text. */
 	color?: string;
+	/** Segment background (hex or theme bg name) — drawn as a powerline-style block. */
+	bg?: string;
 	/** Display priority; lower = earlier. Default 999. */
 	order?: number;
+	/**
+	 * Which bar this segment renders in. Defaults to the global
+	 * style.position; setting it splits the statusline into multiple bars.
+	 */
+	position?: StylePosition;
 	/** Shell-command segments: label shown in /info. Defaults to the name. */
 	label?: string;
 	/** Shell-command segments: command whose stdout becomes {output}. */
@@ -64,6 +71,11 @@ export type SeparatorConfig = {
 	char?: string;
 	/** Separator color (hex or theme color). Default "dim". */
 	color?: string;
+	/**
+	 * powerline: draw `char` as a transition arrow — foreground from the
+	 * previous segment's bg, background from the next segment's bg.
+	 */
+	mode?: "char" | "powerline";
 };
 
 /**
@@ -218,7 +230,10 @@ function sanitizeSegmentConfig(value: unknown): SegmentConfig | null {
 	if (typeof v.hidden === "boolean") out.hidden = v.hidden;
 	if (typeof v.format === "string") out.format = v.format;
 	if (typeof v.color === "string") out.color = v.color;
+	if (typeof v.bg === "string") out.bg = v.bg;
 	if (typeof v.order === "number") out.order = v.order;
+	const position = oneOf(v.position, STYLE_POSITIONS);
+	if (position) out.position = position;
 	if (typeof v.label === "string") out.label = v.label;
 	if (typeof v.command === "string") out.command = v.command;
 	if (typeof v.interval === "number") out.interval = v.interval;
@@ -236,6 +251,7 @@ export function readGlobalConfig(): GlobalConfig {
 			config.separator = {
 				char: typeof sep.char === "string" ? sep.char : undefined,
 				color: typeof sep.color === "string" ? sep.color : undefined,
+				mode: sep.mode === "powerline" ? "powerline" : undefined,
 			};
 		}
 		if (data.style !== undefined) {

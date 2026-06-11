@@ -1,6 +1,8 @@
 /**
- * /info segments — toggle visibility of built-in segments, registered
- * dynamic segments, and (when present) individual extension statuses.
+ * /info segments — per segment: visibility plus which bar it renders in
+ * (shown = the global bar from /info style; above/below/footer pin it,
+ * splitting the statusline into multiple bars). Also covers registered
+ * dynamic segments and (when present) individual extension statuses.
  */
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -13,8 +15,28 @@ import {
 } from "../constants.js";
 import { registeredSegments, visibleDynamic } from "../registry.js";
 import { getKnownStatusKeys, shouldShowStatus } from "../status-filter.js";
+import type { StylePosition } from "../constants.js";
 import type { ConfiguratorDeps } from "./deps.js";
 import { openSettingsView } from "./view.js";
+
+// Value shown in the list ↔ segment placement. "shown" follows the global
+// bar; the rest pin the segment to a specific bar.
+const PLACEMENT_VALUES = ["shown", "above", "below", "footer", "hidden"] as const;
+type PlacementValue = (typeof PLACEMENT_VALUES)[number];
+
+const VALUE_TO_POSITION: Record<string, StylePosition> = {
+	above: "aboveEditor",
+	below: "belowEditor",
+	footer: "footer",
+};
+
+function placementOf(visible: boolean, position: StylePosition | undefined): PlacementValue {
+	if (!visible) return "hidden";
+	if (position === "aboveEditor") return "above";
+	if (position === "belowEditor") return "below";
+	if (position === "footer") return "footer";
+	return "shown";
+}
 
 export async function openSegmentConfigurator(
 	ctx: ExtensionContext,
@@ -56,20 +78,26 @@ export async function openSegmentConfigurator(
 		}
 	};
 
+	const configs = deps.getSegmentConfigs();
+	const placementDescription =
+		"shown = the global bar; above/below/footer pin it to that bar";
 	const segmentItems: SettingItem[] = [
 		...ALL_SEGMENTS.map((segment): SettingItem => ({
 			id: `segment:${segment}`,
 			label: SEGMENT_LABELS[segment],
-			description: "Footer segment visibility",
-			currentValue: segmentVisibility.get(segment) ? "shown" : "hidden",
-			values: ["shown", "hidden"],
+			description: placementDescription,
+			currentValue: placementOf(
+				segmentVisibility.get(segment) ?? false,
+				configs[segment]?.position,
+			),
+			values: [...PLACEMENT_VALUES],
 		})),
 		...Array.from(registeredSegments.entries()).map(([name, provider]): SettingItem => ({
 			id: `dyn-segment:${name}`,
 			label: provider.label,
-			description: "Registered footer segment",
-			currentValue: dynVisibility.get(name) ? "shown" : "hidden",
-			values: ["shown", "hidden"],
+			description: placementDescription,
+			currentValue: placementOf(dynVisibility.get(name) ?? false, configs[name]?.position),
+			values: [...PLACEMENT_VALUES],
 		})),
 	];
 	const statusItems: SettingItem[] = knownStatusKeys.length > 0
@@ -102,17 +130,24 @@ export async function openSegmentConfigurator(
 			if (id.startsWith("segment:")) {
 				const segment = id.slice("segment:".length);
 				if (!isSegmentName(segment)) return;
-				segmentVisibility.set(segment, newValue === "shown");
+				const visible = newValue !== "hidden";
+				segmentVisibility.set(segment, visible);
 				persistSegmentsFromVisibility();
+				if (visible) {
+					deps.updateSegmentConfig(segment, { position: VALUE_TO_POSITION[newValue] });
+				}
 				return;
 			}
 
 			if (id.startsWith("dyn-segment:")) {
 				const name = id.slice("dyn-segment:".length);
-				const shown = newValue === "shown";
-				dynVisibility.set(name, shown);
+				const visible = newValue !== "hidden";
+				dynVisibility.set(name, visible);
 				// updateSegmentConfig syncs visibleDynamic from the config.
-				deps.updateSegmentConfig(name, { hidden: shown ? undefined : true });
+				deps.updateSegmentConfig(name, {
+					hidden: visible ? undefined : true,
+					...(visible ? { position: VALUE_TO_POSITION[newValue] } : {}),
+				});
 				return;
 			}
 

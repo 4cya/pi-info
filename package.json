@@ -53,6 +53,7 @@
 	"pi": {
 		"extensions": [
 			"./extensions/statusline.ts"
-		]
+		],
+		"image": "https://raw.githubusercontent.com/moesin-lab/pi-info/refs/heads/main/assets/cover.png"
 	}
 }

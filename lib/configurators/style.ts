@@ -31,12 +31,19 @@ export const STYLE_PRESETS: { name: string; description: string; style: StyleCon
 	{ name: "top-line", description: "single rule above the footer", style: { border: "top" } },
 	{ name: "above-input", description: "plain bar above the input box", style: { position: "aboveEditor" } },
 	{ name: "below-input", description: "plain bar below the input box", style: { position: "belowEditor" } },
+	{
+		name: "merged",
+		description: "woven into the input box's bottom border",
+		style: { position: "editorBottom" },
+	},
 ];
 
 const POSITION_LABELS: Record<string, string> = {
 	footer: "footer (bottom)",
 	aboveEditor: "above the input box",
 	belowEditor: "below the input box",
+	editorTop: "woven into the input box's top border",
+	editorBottom: "woven into the input box's bottom border",
 };
 
 export async function openStyleConfigurator(

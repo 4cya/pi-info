@@ -20,8 +20,18 @@ export const SEGMENT_LABELS: Record<SegmentName, string> = {
 	extensions: "Extension statuses",
 };
 
-/** Where the statusline is mounted. Widget placements map to pi's setWidget. */
-export const STYLE_POSITIONS = ["footer", "aboveEditor", "belowEditor"] as const;
+/**
+ * Where the statusline is mounted. aboveEditor/belowEditor map to pi's
+ * setWidget; editorTop/editorBottom weave the content into the input
+ * box's own border rules via a custom editor component.
+ */
+export const STYLE_POSITIONS = [
+	"footer",
+	"aboveEditor",
+	"belowEditor",
+	"editorTop",
+	"editorBottom",
+] as const;
 export type StylePosition = (typeof STYLE_POSITIONS)[number];
 
 export const STYLE_ALIGNS = ["left", "center", "right"] as const;

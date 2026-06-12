@@ -28,6 +28,7 @@ import {
 	type StylePosition,
 } from "./constants.js";
 import { registeredSegments, visibleDynamic } from "./registry.js";
+import { getRenderer } from "./renderer.js";
 import { shouldShowStatus, type StatusFilter } from "./status-filter.js";
 import { applyContainerStyle, contentWidthFor } from "./style.js";
 import { renderTemplate, runsText, trimRuns, type StyledRun } from "./template.js";
@@ -117,11 +118,46 @@ export function renderFooterLines(
 	const style = state.style ?? {};
 	const { parts, separator } = renderFooterParts(ctx, theme, state, extensionStatuses, position);
 	if (parts.length === 0 && position && position !== "footer") return [];
+
+	// A user renderer module gets first crack at the whole bar.
+	const renderer = getRenderer();
+	if (renderer?.renderBar) {
+		try {
+			const out = renderer.renderBar({
+				position: position ?? style.position ?? "footer",
+				parts,
+				separator,
+				width,
+				theme,
+				style,
+			});
+			if (typeof out === "string") return [out];
+			if (Array.isArray(out)) return out;
+		} catch {
+			// Broken user renderer: fall through to the default pipeline.
+		}
+	}
+
+	const texts = parts.map((part) => part.text);
 	const content =
 		style.overflow === "wrap"
-			? packLines(parts, separator, contentWidthFor(width, style))
-			: parts.join(separator);
+			? packLines(texts, separator, contentWidthFor(width, style))
+			: texts.join(separator);
 	return applyContainerStyle(content, width, style, theme);
+}
+
+/**
+ * Renders one bar's joined content with no container styling — what the
+ * editor-border embed needs. Null when the bar has no visible segments.
+ */
+export function renderBarParts(
+	ctx: ExtensionContext,
+	theme: Theme,
+	state: FooterRenderState,
+	extensionStatuses: ReadonlyMap<string, string>,
+	position: StylePosition,
+): { parts: { key: string; text: string }[]; separator: string } {
+	return renderFooterParts(ctx, theme, state, extensionStatuses, position);
 }
 
 /** Renders the untruncated segment content line (no container styling). */
@@ -133,7 +169,7 @@ export function renderFooterLine(
 	extensionStatuses: ReadonlyMap<string, string>,
 ): string {
 	const { parts, separator } = renderFooterParts(ctx, theme, state, extensionStatuses);
-	return parts.join(separator);
+	return parts.map((part) => part.text).join(separator);
 }
 
 /** Renders each segment to its colored text, in display order. */
@@ -143,7 +179,7 @@ function renderFooterParts(
 	state: FooterRenderState,
 	extensionStatuses: ReadonlyMap<string, string>,
 	position?: StylePosition,
-): { parts: string[]; separator: string } {
+): { parts: { key: string; text: string }[]; separator: string } {
 	// A segment belongs to the bar its config names, else the global one.
 	const basePosition = state.style?.position ?? "footer";
 	const inBar = (key: string) =>
@@ -277,13 +313,16 @@ function renderFooterParts(
 			const next = i + 1 < parts.length ? bgOf(parts[i + 1].key) : null;
 			if (!cur) {
 				// Plain segment: no block, just a space before the next one.
-				return i + 1 < parts.length ? `${part.text} ` : part.text;
+				return {
+					key: part.key,
+					text: i + 1 < parts.length ? `${part.text} ` : part.text,
+				};
 			}
 			const body = ` ${part.text} `;
 			const block = cur.on + body.replaceAll("\x1b[0m", `\x1b[0m${cur.on}`) + cur.off;
 			const arrow =
 				(next?.on ?? "") + bgEscapeToFg(cur.on) + arrowChar + "\x1b[39m" + (next?.off ?? "");
-			return block + arrow;
+			return { key: part.key, text: block + arrow };
 		});
 		return { parts: texts, separator: "" };
 	}
@@ -295,5 +334,5 @@ function renderFooterParts(
 		: "  ";
 	// Truncation happens in the container layer (applyContainerStyle),
 	// which knows the border/padding overhead.
-	return { parts: parts.map((part) => part.text), separator };
+	return { parts, separator };
 }

@@ -20,22 +20,32 @@ import type { ConfiguratorDeps } from "./deps.js";
 import { openSettingsView } from "./view.js";
 
 // Value shown in the list ↔ segment placement. "shown" follows the global
-// bar; the rest pin the segment to a specific bar.
-const PLACEMENT_VALUES = ["shown", "above", "below", "footer", "hidden"] as const;
+// bar; the rest pin the segment to a specific bar. edge-top/edge-bottom
+// weave the segment into the input box's border rules.
+const PLACEMENT_VALUES = [
+	"shown", "above", "below", "footer", "edge-top", "edge-bottom", "hidden",
+] as const;
 type PlacementValue = (typeof PLACEMENT_VALUES)[number];
 
 const VALUE_TO_POSITION: Record<string, StylePosition> = {
 	above: "aboveEditor",
 	below: "belowEditor",
 	footer: "footer",
+	"edge-top": "editorTop",
+	"edge-bottom": "editorBottom",
+};
+
+const POSITION_TO_VALUE: Record<StylePosition, PlacementValue> = {
+	footer: "footer",
+	aboveEditor: "above",
+	belowEditor: "below",
+	editorTop: "edge-top",
+	editorBottom: "edge-bottom",
 };
 
 function placementOf(visible: boolean, position: StylePosition | undefined): PlacementValue {
 	if (!visible) return "hidden";
-	if (position === "aboveEditor") return "above";
-	if (position === "belowEditor") return "below";
-	if (position === "footer") return "footer";
-	return "shown";
+	return position ? POSITION_TO_VALUE[position] : "shown";
 }
 
 export async function openSegmentConfigurator(
@@ -80,7 +90,7 @@ export async function openSegmentConfigurator(
 
 	const configs = deps.getSegmentConfigs();
 	const placementDescription =
-		"shown = the global bar; above/below/footer pin it to that bar";
+		"shown = the global bar; above/below/footer pin it; edge-top/edge-bottom weave it into the input box border";
 	const segmentItems: SettingItem[] = [
 		...ALL_SEGMENTS.map((segment): SettingItem => ({
 			id: `segment:${segment}`,

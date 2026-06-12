@@ -130,7 +130,7 @@ The whole bar is styled by the optional top-level `style` block — where it liv
 
 | Key | Values | Meaning |
 | --- | --- | --- |
-| `position` | `footer` (default) / `aboveEditor` / `belowEditor` | Where the bar is mounted; non-footer placements replace pi's built-in footer |
+| `position` | `footer` (default) / `aboveEditor` / `belowEditor` / `editorTop` / `editorBottom` | Where the bar is mounted; non-footer placements replace pi's built-in footer. `editorTop`/`editorBottom` weave the content into the input box's own border rule |
 | `align` | `left` (default) / `center` / `right` | Full width: aligns the content; content width: aligns the bar |
 | `width` | `full` (default) / `content` | Span the terminal or shrink-wrap the segments |
 | `overflow` | `truncate` (default) / `wrap` | Overwide content: cut it off, or wrap onto more lines at segment boundaries |
@@ -140,7 +140,17 @@ The whole bar is styled by the optional top-level `style` block — where it liv
 | `padding` | `0`–`8` | Spaces between content and the border/background edge |
 | `marginTop` / `marginBottom` | `0`–`5` | Blank lines around the bar |
 
-`/info style` includes one-step presets: `plain`, `boxed` (rounded border), `island` (centered floating bar), `top-line`, `above-input`, `below-input`.
+`/info style` includes one-step presets: `plain`, `boxed` (rounded border), `island` (centered floating bar), `top-line`, `above-input`, `below-input`, `merged` (woven into the input box border).
+
+**Merging with the input box:** `editorTop` / `editorBottom` render the bar *inside* the input box's own border rule instead of as a separate line — the tightest integration:
+
+```text
+─── claude-opus-4.7 ❯ think:med ❯ 2.6% / 1.0M ────────────
+hello world█
+───────────────────────────────────────────────────────────
+```
+
+The editor's scroll indicator ("─── ↓ 2 more") takes priority over the embed when the input is scrolled. Caveat: pi has a single custom-editor slot, so this mode conflicts with other editor-replacing extensions (e.g. vim modes) — last one wins.
 
 ```json
 "style": { "align": "center", "width": "content", "border": "rounded", "padding": 1 }
@@ -251,6 +261,32 @@ registerEffect("flag", {
 });
 // users can now write "color": "flag" or [text](flag)
 ```
+
+## Custom renderer: change anything without forking
+
+When the built-in styling options aren't enough, point the config at your own module — it takes over the *final rendering* of any bar or editor-border embed:
+
+```json
+"style": { "renderer": "/home/me/.pi/my-renderer.ts" }
+```
+
+```ts
+// my-renderer.ts — both exports optional
+import type { BarRenderInput, EdgeRenderInput } from "@sentixx/pi-info/extensions/statusline.js";
+
+export function renderBar(bar: BarRenderInput): string[] | string | null {
+	if (bar.position !== "footer") return null; // null = default pipeline
+	// bar.parts: [{ key, text }] colored segments in display order
+	return [`>> ${bar.parts.map((p) => p.text).join(" | ")} <<`];
+}
+
+export function renderEdge(edge: EdgeRenderInput): string | null {
+	// edge.rule() colors text like the input box border
+	return edge.rule("═══ ") + edge.parts.map((p) => p.text).join(" · ") + edge.rule(" ═══");
+}
+```
+
+Hooks receive fully rendered segments (`parts`), the separator, terminal `width`, `theme`, and the `style` config; return `null` to fall through, so you can override exactly one bar and keep the defaults elsewhere. A renderer that fails to load or throws is skipped — the statusline never breaks because of it. Combined with `registerSegment` / `registerEffect`, every layer is replaceable without touching this package.
 
 ## Scope: what pi-info does and doesn't do
 

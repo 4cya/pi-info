@@ -33,7 +33,9 @@ import type {
 	ExtensionAPI,
 	ExtensionContext,
 	ReadonlyFooterDataProvider,
+	Theme,
 } from "@earendil-works/pi-coding-agent";
+import { composeEdgeLine, StatuslineEditor } from "../lib/editor-embed.js";
 import { openColorConfigurator } from "../lib/configurators/colors.js";
 import type { ConfiguratorDeps } from "../lib/configurators/deps.js";
 import { openFormatConfigurator } from "../lib/configurators/format.js";
@@ -62,7 +64,8 @@ import {
 	type StylePosition,
 } from "../lib/constants.js";
 import { animatedUsed, beginEffectTracking } from "../lib/effects.js";
-import { renderFooterLines, type FooterRenderState } from "../lib/footer.js";
+import { renderBarParts, renderFooterLines, type FooterRenderState } from "../lib/footer.js";
+import { getRenderer, loadRenderer } from "../lib/renderer.js";
 import { PRESETS, type Preset } from "../lib/presets.js";
 import { registeredSegments, registerSegment, visibleDynamic } from "../lib/registry.js";
 import {
@@ -78,6 +81,7 @@ export { registerSegment, unregisterSegment } from "../lib/registry.js";
 export { registerEffect, unregisterEffect } from "../lib/effects.js";
 export type { TextEffect } from "../lib/effects.js";
 export type { SegmentProvider } from "../segments/types.js";
+export type { BarRenderInput, EdgeRenderInput, RendererModule } from "../lib/renderer.js";
 
 export default function (pi: ExtensionAPI) {
 	let requestRender: (() => void) | undefined;
@@ -91,6 +95,17 @@ export default function (pi: ExtensionAPI) {
 	let uiCtx: ExtensionContext | undefined;
 	let footerDataRef: ReadonlyFooterDataProvider | undefined;
 	let mountedPositions = new Set<StylePosition>();
+	// Theme is only handed to footer/widget factories; the editor embed
+	// renders with this captured reference.
+	let themeRef: Theme | undefined;
+	// Tracks whether we own the custom-editor slot, so we never clear an
+	// editor another extension installed.
+	let editorMounted = false;
+	let footerInstalled = false;
+	// pi's setEditorComponent steals focus to the editor; doing that while
+	// an /info view is open breaks it. Defer the swap until the view closes.
+	let configuratorOpen = false;
+	let editorMountPending = false;
 
 	const seenStatusKeys = new Set<string>();
 	const refresh = () => requestRender?.();
@@ -116,6 +131,7 @@ export default function (pi: ExtensionAPI) {
 		}
 	};
 
+	let rendererError: string | null = null;
 	const loadConfig = () => {
 		const config = readGlobalConfig();
 		segmentConfigs = config.segments ?? {};
@@ -124,6 +140,10 @@ export default function (pi: ExtensionAPI) {
 		visibleSegments = readGlobalSegments() ?? DEFAULT_SEGMENTS;
 		registerCustomSegments();
 		syncDynamicVisibility();
+		void loadRenderer(styleConfig.renderer).then((error) => {
+			rendererError = error;
+			refresh();
+		});
 	};
 	loadConfig();
 
@@ -178,6 +198,53 @@ export default function (pi: ExtensionAPI) {
 		return lines;
 	};
 
+	/** Renders one editor-border embed line; ticker bookkeeping included. */
+	const renderEdge = (
+		ctx: ExtensionContext,
+		width: number,
+		edge: "top" | "bottom",
+		rule: (s: string) => string,
+	): string | null => {
+		if (!themeRef) return null;
+		const position: StylePosition = edge === "top" ? "editorTop" : "editorBottom";
+		if (!mountedPositions.has(position)) return null;
+		beginEffectTracking();
+		const { parts, separator } = renderBarParts(
+			ctx,
+			themeRef,
+			renderState(),
+			footerDataRef?.getExtensionStatuses?.() ?? new Map(),
+			position,
+		);
+		animatedByBar.set(position, animatedUsed()?.intervalMs ?? null);
+		syncTicker();
+		if (parts.length === 0) return null;
+		const align = styleConfig.align ?? "left";
+
+		// A user renderer module gets first crack at the embed line.
+		const renderer = getRenderer();
+		if (renderer?.renderEdge) {
+			try {
+				const out = renderer.renderEdge({
+					edge,
+					position,
+					parts,
+					separator,
+					width,
+					theme: themeRef,
+					align,
+					rule,
+				});
+				if (typeof out === "string") return out;
+			} catch {
+				// Broken user renderer: fall through to the default line.
+			}
+		}
+
+		const content = parts.map((part) => part.text).join(separator);
+		return composeEdgeLine(content, width, align, rule);
+	};
+
 	/** Bars referenced by the global position or any per-segment override. */
 	const positionsInUse = (): Set<StylePosition> => {
 		const positions = new Set<StylePosition>([styleConfig.position ?? "footer"]);
@@ -189,42 +256,60 @@ export default function (pi: ExtensionAPI) {
 
 	/**
 	 * Mounts one bar per position in use (global style.position plus any
-	 * per-segment overrides). The footer slot is always claimed: it either
-	 * renders the footer bar or renders nothing — hiding pi's built-in
-	 * footer (the statusline replaces it) while keeping access to extension
-	 * statuses, which only the footer factory receives.
+	 * per-segment overrides). Mounting is INCREMENTAL: components are only
+	 * (un)installed when their position appears/disappears — a full rebuild
+	 * mid-session would disturb whatever UI is currently open (e.g. the
+	 * /info configurators). Render closures read mountedPositions live.
+	 *
+	 * The footer slot is always claimed: it either renders the footer bar
+	 * or renders nothing — hiding pi's built-in footer (the statusline
+	 * replaces it) while keeping access to extension statuses, which only
+	 * the footer factory receives.
 	 */
 	const mountUI = (ctx: ExtensionContext) => {
 		if (!ctx.hasUI) return;
+		if (uiCtx !== ctx) {
+			// New session/UI: everything must be reinstalled.
+			footerInstalled = false;
+			editorMounted = false;
+			mountedPositions = new Set();
+		}
 		uiCtx = ctx;
+		const previous = mountedPositions;
 		const positions = positionsInUse();
 		mountedPositions = positions;
 		animatedByBar.clear();
 
-		ctx.ui.setFooter((tui, theme, footerData) => {
-			footerDataRef = footerData;
-			requestRender = () => tui.requestRender();
-			return {
-				dispose() {
-					requestRender = undefined;
-				},
-				invalidate() {},
-				render(width: number): string[] {
-					if (!positions.has("footer")) return [];
-					return renderLines(
-						ctx,
-						theme,
-						width,
-						footerData?.getExtensionStatuses?.() ?? new Map(),
-						"footer",
-					);
-				},
-			};
-		});
+		if (!footerInstalled) {
+			ctx.ui.setFooter((tui, theme, footerData) => {
+				footerDataRef = footerData;
+				themeRef = theme;
+				requestRender = () => tui.requestRender();
+				return {
+					dispose() {
+						requestRender = undefined;
+					},
+					invalidate() {},
+					render(width: number): string[] {
+						if (!mountedPositions.has("footer")) return [];
+						return renderLines(
+							ctx,
+							theme,
+							width,
+							footerData?.getExtensionStatuses?.() ?? new Map(),
+							"footer",
+						);
+					},
+				};
+			});
+			footerInstalled = true;
+		}
 
 		for (const placement of ["aboveEditor", "belowEditor"] as const) {
 			const key = `pi-info:${placement}`;
-			if (!positions.has(placement)) {
+			const wanted = positions.has(placement);
+			if (wanted === previous.has(placement)) continue;
+			if (!wanted) {
 				ctx.ui.setWidget(key, undefined);
 				continue;
 			}
@@ -247,6 +332,30 @@ export default function (pi: ExtensionAPI) {
 				},
 				{ placement },
 			);
+		}
+
+		// editorTop/editorBottom replace pi's editor with a subclass that
+		// weaves the bar into the input box's border rules. renderEdge reads
+		// mountedPositions live, so switching between top/bottom needs no
+		// editor rebuild.
+		const needsEditor = positions.has("editorTop") || positions.has("editorBottom");
+		if (needsEditor === editorMounted) return;
+		if (configuratorOpen) {
+			editorMountPending = true;
+			return;
+		}
+		if (needsEditor) {
+			ctx.ui.setEditorComponent((tui, editorTheme, keybindings) => {
+				const editor = new StatuslineEditor(tui, editorTheme, keybindings);
+				requestRender = () => tui.requestRender();
+				editor.embed = (width, edge) =>
+					renderEdge(ctx, width, edge, (s) => editor.borderColor?.(s) ?? s);
+				return editor;
+			});
+			editorMounted = true;
+		} else {
+			ctx.ui.setEditorComponent(undefined);
+			editorMounted = false;
 		}
 	};
 
@@ -372,64 +481,78 @@ export default function (pi: ExtensionAPI) {
 				.map((item) => ({ value: item, label: item }));
 		},
 		handler: async (args, ctx) => {
-			// Route known subcommands directly, fall back to a select menu.
-			const direct = args.trim().split(/\s+/)[0].toLowerCase();
-			const route = async (key: string): Promise<boolean> => {
-				switch (key) {
-					case "segments":
-						await openSegmentConfigurator(ctx, deps);
-						return true;
-					case "color":
-					case "colors":
-						await openColorConfigurator(ctx, deps);
-						return true;
-					case "order":
-						await openOrderConfigurator(ctx, deps);
-						return true;
-					case "separator":
-					case "sep":
-						await openSeparatorConfigurator(ctx, deps);
-						return true;
-					case "format":
-					case "formats":
-						await openFormatConfigurator(ctx, deps);
-						return true;
-					case "style":
-					case "styles":
-						await openStyleConfigurator(ctx, deps);
-						return true;
-					case "preset":
-					case "presets": {
-						const choice = await ctx.ui.select(
-							"Format preset",
-							PRESETS.map((preset) => `${preset.name} — ${preset.description}`),
-						);
-						const preset = choice
-							? PRESETS.find((p) => choice.startsWith(p.name))
-							: undefined;
-						if (preset) applyPreset(preset);
-						return true;
-					}
-					default:
-						return false;
+			configuratorOpen = true;
+			try {
+				await runInfoCommand(args, ctx);
+			} finally {
+				configuratorOpen = false;
+				// Apply any editor swap deferred while the view was open.
+				if (editorMountPending && uiCtx) {
+					editorMountPending = false;
+					mountUI(uiCtx);
 				}
-			};
-
-			if (await route(direct)) return;
-
-			const choice = await ctx.ui.select("pi-info", [
-				"segments  — show/hide footer segments",
-				"color     — change segment colors",
-				"order     — reorder segment display",
-				"separator — change the segment separator",
-				"format    — edit segment format templates",
-				"style     — container style: position, border, background",
-				"preset    — apply a format preset",
-			]);
-			if (!choice) return;
-			await route(choice.split(/\s+—/)[0].trim());
+			}
 		},
 	});
+
+	const runInfoCommand = async (args: string, ctx: ExtensionContext) => {
+	// Route known subcommands directly, fall back to a select menu.
+	const direct = args.trim().split(/\s+/)[0].toLowerCase();
+		const route = async (key: string): Promise<boolean> => {
+			switch (key) {
+				case "segments":
+					await openSegmentConfigurator(ctx, deps);
+					return true;
+				case "color":
+				case "colors":
+					await openColorConfigurator(ctx, deps);
+					return true;
+				case "order":
+					await openOrderConfigurator(ctx, deps);
+					return true;
+				case "separator":
+				case "sep":
+					await openSeparatorConfigurator(ctx, deps);
+					return true;
+				case "format":
+				case "formats":
+					await openFormatConfigurator(ctx, deps);
+					return true;
+				case "style":
+				case "styles":
+					await openStyleConfigurator(ctx, deps);
+					return true;
+				case "preset":
+				case "presets": {
+					const choice = await ctx.ui.select(
+						"Format preset",
+						PRESETS.map((preset) => `${preset.name} — ${preset.description}`),
+					);
+					const preset = choice
+						? PRESETS.find((p) => choice.startsWith(p.name))
+						: undefined;
+					if (preset) applyPreset(preset);
+					return true;
+				}
+				default:
+					return false;
+			}
+		};
+
+		if (await route(direct)) return;
+
+		const choice = await ctx.ui.select("pi-info", [
+			"segments  — show/hide footer segments",
+			"color     — change segment colors",
+			"order     — reorder segment display",
+			"separator — change the segment separator",
+			"format    — edit segment format templates",
+			"style     — container style: position, border, background",
+			"preset    — apply a format preset",
+		]);
+		if (!choice) return;
+		await route(choice.split(/\s+—/)[0].trim());
+	};
 
 	pi.on("model_select", async () => refresh());
 	pi.on("thinking_level_select", async () => refresh());
@@ -445,6 +568,10 @@ export default function (pi: ExtensionAPI) {
 		restoreStatusFilter(ctx);
 		thresholds = parseThresholds();
 		mountUI(ctx);
+		// Surface renderer load failures once the UI exists.
+		setTimeout(() => {
+			if (rendererError && ctx.hasUI) ctx.ui.notify(rendererError, "warning");
+		}, 500);
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
@@ -453,6 +580,10 @@ export default function (pi: ExtensionAPI) {
 			ctx.ui.setFooter(undefined);
 			ctx.ui.setWidget("pi-info:aboveEditor", undefined);
 			ctx.ui.setWidget("pi-info:belowEditor", undefined);
+			if (editorMounted) {
+				ctx.ui.setEditorComponent(undefined);
+				editorMounted = false;
+			}
 		}
 		uiCtx = undefined;
 	});

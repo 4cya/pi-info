@@ -130,7 +130,7 @@ powerline 模式下分隔符 `char` 的前景色取自左块的 `bg`、背景色
 
 | 键 | 取值 | 含义 |
 | --- | --- | --- |
-| `position` | `footer`（默认）/ `aboveEditor` / `belowEditor` | 挂载位置；非 footer 位置会替代 pi 内置 footer |
+| `position` | `footer`（默认）/ `aboveEditor` / `belowEditor` / `editorTop` / `editorBottom` | 挂载位置；非 footer 位置会替代 pi 内置 footer。`editorTop`/`editorBottom` 把内容织进输入框自己的边框线 |
 | `align` | `left`（默认）/ `center` / `right` | 全宽时对齐内容；紧贴内容时对齐整条栏 |
 | `width` | `full`（默认）/ `content` | 铺满终端，或紧贴内容宽度 |
 | `overflow` | `truncate`（默认）/ `wrap` | 内容超宽：截断，或按 segment 边界换行 |
@@ -140,7 +140,17 @@ powerline 模式下分隔符 `char` 的前景色取自左块的 `bg`、背景色
 | `padding` | `0`–`8` | 内容与边框/背景边缘之间的空格数 |
 | `marginTop` / `marginBottom` | `0`–`5` | 栏上下的空行数 |
 
-`/info style` 内置一键预设：`plain`、`boxed`（圆角边框）、`island`（居中悬浮岛）、`top-line`、`above-input`、`below-input`。
+`/info style` 内置一键预设：`plain`、`boxed`（圆角边框）、`island`（居中悬浮岛）、`top-line`、`above-input`、`below-input`、`merged`（织进输入框边框）。
+
+**与输入框融合：** `editorTop` / `editorBottom` 把状态栏渲染*在输入框自己的边框线里*，不再是独立的一行——融合度最高的形态：
+
+```text
+─── claude-opus-4.7 ❯ think:med ❯ 2.6% / 1.0M ────────────
+hello world█
+───────────────────────────────────────────────────────────
+```
+
+输入内容滚动时，编辑器的滚动指示（"─── ↓ 2 more"）优先于嵌入内容。注意：pi 只有一个自定义编辑器插槽，此模式与其他替换编辑器的扩展（如 vim 模式）互斥——后装者生效。
 
 ```json
 "style": { "align": "center", "width": "content", "border": "rounded", "padding": 1 }
@@ -250,6 +260,32 @@ registerEffect("flag", {
 });
 // 用户即可写 "color": "flag" 或 [text](flag)
 ```
+
+## 自定义渲染器：不 fork 也能改一切
+
+内置样式选项不够用时，把配置指向你自己的模块——它接管任意栏或嵌入线的*最终渲染*：
+
+```json
+"style": { "renderer": "/home/me/.pi/my-renderer.ts" }
+```
+
+```ts
+// my-renderer.ts —— 两个导出都是可选的
+import type { BarRenderInput, EdgeRenderInput } from "@sentixx/pi-info/extensions/statusline.js";
+
+export function renderBar(bar: BarRenderInput): string[] | string | null {
+	if (bar.position !== "footer") return null; // null = 走默认管线
+	// bar.parts: [{ key, text }] 已上色的段，按显示顺序
+	return [`>> ${bar.parts.map((p) => p.text).join(" | ")} <<`];
+}
+
+export function renderEdge(edge: EdgeRenderInput): string | null {
+	// edge.rule() 按输入框边框颜色上色
+	return edge.rule("═══ ") + edge.parts.map((p) => p.text).join(" · ") + edge.rule(" ═══");
+}
+```
+
+钩子拿到已渲染的段（`parts`）、分隔符、终端 `width`、`theme` 和 `style` 配置；返回 `null` 即回落默认——可以只接管一条栏，其余保持默认。加载失败或运行抛错的渲染器会被跳过，状态栏不会因此坏掉。配合 `registerSegment` / `registerEffect`，每一层都可以被替换，全程不用碰本包代码。
 
 ## 边界：pi-info 做什么、不做什么
 

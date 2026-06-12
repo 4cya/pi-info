@@ -102,6 +102,11 @@ export type StyleConfig = {
 	border?: BorderStyleName;
 	/** Border color (hex or theme color). Default "dim". */
 	borderColor?: string;
+	/**
+	 * Path to a user module that can take over bar/edge rendering
+	 * (see lib/renderer.ts). Full styling control without forking.
+	 */
+	renderer?: string;
 };
 
 export type GlobalConfig = {
@@ -202,6 +207,7 @@ export function sanitizeStyleConfig(value: unknown): StyleConfig {
 	const border = oneOf(v.border, BORDER_STYLES);
 	if (border) out.border = border;
 	if (typeof v.borderColor === "string") out.borderColor = v.borderColor;
+	if (typeof v.renderer === "string") out.renderer = v.renderer;
 	return out;
 }
 

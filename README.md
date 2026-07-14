@@ -28,7 +28,7 @@ claude-opus-4.7  ❯  think:med  ❯  2.6% / 1.0M  ❯  $0.412  ❯  ↑12k ↓3
 ## Quick start
 
 ```bash
-pi install npm:@sentixx/pi-info
+pi install git:github.com/4cya/pi-info
 ```
 
 Already running? `/reload`, then open the configurator:

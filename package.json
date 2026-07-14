@@ -1,5 +1,5 @@
 {
-	"name": "@sentixx/pi-info",
+	"name": "pi-info",
 	"version": "0.8.0",
 	"description": "Fully customizable statusline for pi — pluggable segments, priority ordering, per-segment colors, and an open registry API so any extension can contribute its own widgets.",
 	"type": "module",
@@ -16,12 +16,12 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/moesin-lab/pi-info.git"
+		"url": "git+https://github.com/4cya/pi-info.git"
 	},
 	"bugs": {
-		"url": "https://github.com/moesin-lab/pi-info/issues"
+		"url": "https://github.com/4cya/pi-info/issues"
 	},
-	"homepage": "https://github.com/moesin-lab/pi-info#readme",
+	"homepage": "https://github.com/4cya/pi-info#readme",
 	"files": [
 		"extensions",
 		"lib",
@@ -55,6 +55,6 @@
 		"extensions": [
 			"./extensions/statusline.ts"
 		],
-		"image": "https://raw.githubusercontent.com/moesin-lab/pi-info/refs/heads/main/assets/cover.png"
+		"image": "https://raw.githubusercontent.com/4cya/pi-info/main/assets/cover.png"
 	}
 }
